@@ -1,0 +1,8 @@
+node_modules
+knowledge
+generatedIMages
+dist
+data
+bun.lock
+package-lock.json
+.env
