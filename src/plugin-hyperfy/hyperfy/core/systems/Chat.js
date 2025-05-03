@@ -27,17 +27,15 @@ export class Chat extends System {
     for (const callback of this.listeners) {
       callback(this.msgs)
     }
-    if (msg.fromId) {
-      const player = this.world.entities.getPlayer(msg.fromId)
-      player?.chat(msg.body)
-    }
+    // if (msg.fromId) {
+    //   const player = this.world.entities.getPlayer(msg.fromId)
+    //   player?.chat(msg.body)
+    // }
     // emit chat event
     const readOnly = Object.freeze({ ...msg })
     this.world.events.emit('chat', readOnly)
     // maybe broadcast
-    if (broadcast) {
       this.world.network.send('chatAdded', msg)
-    }
   }
 
   command(text) {

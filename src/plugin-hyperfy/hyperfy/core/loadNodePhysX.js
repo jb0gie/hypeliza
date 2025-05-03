@@ -69,16 +69,6 @@ export function loadNodePhysX() {
           // Fallback: Try calling without config (might find WASM automatically)
           physxInstance = await PhysXFactory()
         }
-
-        // --- Initial DEBUG: Log immediately after factory call ---
-        if (physxInstance) {
-          console.log('[loadNodePhysX Debug Init] Keys on physxInstance:', Object.keys(physxInstance));
-          console.log('[loadNodePhysX Debug Init] typeof physxInstance.PxVec3:', typeof physxInstance.PxVec3);
-        } else {
-          console.error('[loadNodePhysX Debug Init] physxInstance is null or undefined!');
-        }
-        // --- END Initial DEBUG ---
-
         // Define the final steps function
         const finalizePhysX = (instance) => {
           if (!instance || typeof instance.PHYSICS_VERSION === 'undefined') {
@@ -87,11 +77,6 @@ export function loadNodePhysX() {
           }
           
           globalThis.PHYSX = instance // Ensure it's globally available
-
-          // --- Final DEBUG: Log just before resolving ---
-          console.log('[loadNodePhysX Debug Final] Keys on global PHYSX:', Object.keys(globalThis.PHYSX || {}));
-          console.log('[loadNodePhysX Debug Final] typeof global PHYSX.PxVec3:', typeof globalThis.PHYSX?.PxVec3);
-          // --- END Final DEBUG ---
 
           const version = PHYSX.PHYSICS_VERSION;
           const allocator = new PHYSX.PxDefaultAllocator();
@@ -106,10 +91,6 @@ export function loadNodePhysX() {
         if (physxInstance && typeof physxInstance.onRuntimeInitialized === 'function') {
           console.log('[loadNodePhysX] Found onRuntimeInitialized, waiting...');
           physxInstance.onRuntimeInitialized = () => {
-            console.log('[loadNodePhysX] PhysX runtime initialized callback fired.');
-            // Re-check after initialization
-            console.log('[loadNodePhysX Debug Callback] Keys on physxInstance:', Object.keys(physxInstance));
-            console.log('[loadNodePhysX Debug Callback] typeof physxInstance.PxVec3:', typeof physxInstance.PxVec3);
             finalizePhysX(physxInstance); // Call final steps AFTER init
           };
           // IMPORTANT: Do not resolve the outer promise here; wait for the callback

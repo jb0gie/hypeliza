@@ -31,7 +31,7 @@ export async function hashFileBuffer(buffer) {
 
 
 // --- Configuration ---
-const WS_URL = process.env.WS_URL || 'ws://localhost:1337/ws'
+const WS_URL = process.env.WS_URL || 'wss://chill.hyperfy.xyz/ws'
 const TICK_RATE = 50 // Hz (how often world.tick runs)
 const MOVE_INTERVAL = 1000 // ms (how often the agent changes direction)
 const CHAT_INTERVAL = 5000 // ms (how often the agent sends a chat message) - Updated

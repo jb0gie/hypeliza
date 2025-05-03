@@ -106,7 +106,7 @@ export class Image extends Node {
     const geoAspect = width / height
     this.texture = new THREE.Texture(image)
     this.texture.colorSpace = THREE.SRGBColorSpace
-    this.texture.anisotropy = this.ctx.world.graphics.maxAnisotropy
+    this.texture.anisotropy = this.ctx.world.graphics?.maxAnisotropy
     this.texture.needsUpdate = true
     if (this._width && this._height) {
       applyFit(this.texture, width, height, this._fit)

@@ -1,5 +1,7 @@
 import {
     type Action,
+    composePromptFromState,
+    ModelType,
     type HandlerCallback,
     type IAgentRuntime,
     type Memory,
@@ -12,6 +14,22 @@ import { HyperfyService } from '../service';
 import { AgentControls } from '../controls'; // Import AgentControls type
 // Import THREE types if needed, e.g., for metadata typing
 // import type * as THREE from 'three';
+
+// Define a simple template for entity extraction
+const entityExtractionTemplate = `
+# Task: Identify the target entity ID based on the user message and the list of entities.
+{{providers}}
+# Instructions: Examine the user message: "{{messageText}}". Identify the entity ID the user wants to navigate to from the list of entities provided in the context. Respond with only the entity ID.
+
+Response format should be a valid JSON block like this:
+\`\`\`json
+{
+    "entityId": "<string>" // The ID of the target entity, or null if none is clearly specified
+}
+\`\`\`
+
+Your response should include the valid JSON block and nothing else.
+`;
 
 export const hyperfyGotoEntityAction: Action = {
     name: 'HYPERFY_GOTO_ENTITY',
@@ -34,29 +52,49 @@ export const hyperfyGotoEntityAction: Action = {
       const controls = world?.controls as AgentControls | undefined; // Get controls and cast type
 
       if (!service || !world || !controls) {
-        logger.error('Hyperfy service, world, or controls not found for HYPERFY_GOTO_ENTITY action.');
-        await callback({ text: "Error: Cannot navigate. Hyperfy connection/controls unavailable." });
+        logger.error('[GOTO Action] Hyperfy service, world, or controls not found.');
+        await callback({ thought: 'Prerequisites failed.', error: "Cannot navigate. Hyperfy connection/controls unavailable." });
         return;
       }
+      
+      let targetEntityId: string | undefined = options?.entityId;
 
-      const targetEntityId = options?.entityId || (message.content?.metadata as { targetEntityId?: string })?.targetEntityId;
-
+      // If entityId wasn't provided in options, try to extract it from the message
       if (!targetEntityId) {
-          logger.warn('HYPERFY_GOTO_ENTITY: No entity ID provided.');
-          await callback({ text: "Action failed: No target entity ID specified.", metadata: { error: 'missing_entity_id' } });
-          return;
+          logger.info('[GOTO Action] No entityId in options, attempting extraction from message...');
+          try {
+              // Compose state including entities provider
+              const extractionState = await runtime.composeState(message, ['ENTITIES', 'RECENT_MESSAGES']);
+
+              const prompt = composePromptFromState({
+                  state: extractionState,
+                  template: entityExtractionTemplate,
+              });
+
+              console.log("prompt", prompt);
+
+              // Use OBJECT_SMALL model for structured response
+              const response = await runtime.useModel(ModelType.OBJECT_SMALL, { prompt });
+
+              if (response && response.entityId && typeof response.entityId === 'string') {
+                  targetEntityId = response.entityId;
+                   logger.info(`[GOTO Action] Extracted entityId: ${targetEntityId}`);
+              } else {
+                   logger.warn('[GOTO Action] Could not extract entityId from message via LLM.', response);
+              }
+
+          } catch (error) {
+              logger.error(`[GOTO Action] Error during entityId extraction: ${error}`);
+              // Proceed without targetEntityId, error handled below
+          }
       }
 
-       // Skip self-check for now as getAgentPlayerId is not implemented
-       /*
-       const selfId = service.getAgentPlayerId();
-       if (targetEntityId === selfId && selfId !== null) {
-           logger.info('HYPERFY_GOTO_ENTITY: Target entity is self. Stopping any current movement.');
-           controls.stopNavigation("target is self"); // Call controls method
-           await callback({ text: "Already at the target location (it's me!)." });
-           return;
-       }
-       */
+      // Final check if we have a target entity ID
+      if (!targetEntityId) {
+          logger.error('[GOTO Action] No target entity ID specified either in options or extracted from message.');
+          await callback({ thought: 'Action failed: No target entity ID.', text: "Action failed: No target entity ID specified.", metadata: { error: 'missing_entity_id' } });
+          return;
+      }
 
       try {
         const targetPosition = service.getEntityPosition(targetEntityId);
@@ -69,7 +107,10 @@ export const hyperfyGotoEntityAction: Action = {
             return;
         }
 
-        // Tell the controls system to start navigating
+        // Stop any previous movement first
+        controls.stopNavigation("goto action request");
+
+        // Tell the controls system to start navigating to the single target
         const targetName = service.getEntityName(targetEntityId);
         logger.info(`HYPERFY_GOTO_ENTITY: Requesting navigation via controls to entity ${targetName || targetEntityId} at (${targetPosition.x.toFixed(2)}, ${targetPosition.z.toFixed(2)})`);
         controls.navigateTo(targetPosition.x, targetPosition.z); // Use controls method
@@ -85,25 +126,6 @@ export const hyperfyGotoEntityAction: Action = {
                status: 'navigation_started'
            }
         });
-
-        // Event listener logic remains the same (assuming runtime.on/off exist)
-        let navigationCompleteListener: EventHandler<any> | null = null;
-        navigationCompleteListener = async (eventData) => {
-            if (eventData.eventName === 'HYPERFY_NAVIGATION_COMPLETE') {
-                 const completedTargetPos = eventData.data?.target;
-                 if (completedTargetPos && targetPosition && completedTargetPos[0] === targetPosition.x && completedTargetPos[2] === targetPosition.z) {
-                    logger.info(`HYPERFY_GOTO_ENTITY: Received navigation complete event for target ${targetEntityId}.`);
-                 } else {
-                    logger.debug(`HYPERFY_GOTO_ENTITY: Received navigation complete event, but target position didn't match or was missing.`);
-                 }
-                 if (navigationCompleteListener) {
-                    runtime.off(EventType.ACTION_COMPLETED, navigationCompleteListener);
-                    logger.debug('HYPERFY_GOTO_ENTITY: Removed navigation complete listener.');
-                    navigationCompleteListener = null;
-                 }
-            }
-        };
-        runtime.on(EventType.ACTION_COMPLETED, navigationCompleteListener);
 
       } catch (error: any) {
         logger.error(`Error during HYPERFY_GOTO_ENTITY for ID ${targetEntityId}:`, error);

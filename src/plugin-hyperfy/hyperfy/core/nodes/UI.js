@@ -117,6 +117,8 @@ export class UI extends Node {
   }
 
   build() {
+    // if this is node is not visible, don't build it
+    if(typeof process !== 'undefined' && process.env.NODE_ENV) return;
     this.unbuild()
     this.canvas = document.createElement('canvas')
     this.canvas.width = this._width * this._res

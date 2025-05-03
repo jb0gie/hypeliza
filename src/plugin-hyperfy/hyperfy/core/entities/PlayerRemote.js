@@ -195,13 +195,19 @@ export class PlayerRemote extends Entity {
   }
 
   chat(msg) {
-    this.nametag.active = false
     this.bubbleText.value = msg
-    this.bubble.active = true
+    //
+    // Check if running in an environment that supports graphics/DOM (like a browser)
+    if (typeof window !== 'undefined' && typeof document !== 'undefined') {
+      this.nametag.active = false
+      this.bubble.active = true
+    }
     clearTimeout(this.chatTimer)
     this.chatTimer = setTimeout(() => {
-      this.bubble.active = false
-      this.nametag.active = true
+      if (typeof window !== 'undefined' && typeof document !== 'undefined') {
+        this.bubble.active = false
+        this.nametag.active = true
+      }
     }, 5000)
   }
 

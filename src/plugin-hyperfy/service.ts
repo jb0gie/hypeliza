@@ -34,14 +34,12 @@ async function hashFileBuffer(buffer: Buffer): Promise<string> {
 
 const LOCAL_AVATAR_PATH = process.env.HYPERFY_AGENT_AVATAR_PATH || './avatar.vrm'
 
-const ENABLE_HYPERFY_TEST_MODE_FLAG = true
-
-const HYPERFY_WS_URL = process.env.WS_URL || 'ws://localhost:1337/ws'
+const HYPERFY_WS_URL = process.env.WS_URL || 'wss://chill.hyperfy.xyz/ws'
 const HYPERFY_TICK_RATE = 50
 const HYPERFY_TEST_MODE_MOVE_INTERVAL = 1000
 const HYPERFY_TEST_MODE_CHAT_INTERVAL = 5000
-const HYPERFY_APPEARANCE_POLL_INTERVAL = 3000
-const HYPERFY_ENTITY_UPDATE_INTERVAL = 500
+const HYPERFY_APPEARANCE_POLL_INTERVAL = 30000
+const HYPERFY_ENTITY_UPDATE_INTERVAL = 1000
 
 export class HyperfyService extends Service {
   static serviceType = 'hyperfy'
@@ -65,8 +63,10 @@ export class HyperfyService extends Service {
   private playerNamesMap: Map<string, string> = new Map()
   private appearanceIntervalId: NodeJS.Timeout | null = null
   private appearanceSet: boolean = false
+  private nameSet: boolean = false
   private PHYSX: any = null
   private isPhysicsSetup: boolean = false
+  private connectionTime: number | null = null
 
   public get currentWorldId(): UUID | null {
     return this._currentWorldId
@@ -78,19 +78,19 @@ export class HyperfyService extends Service {
 
   constructor(protected runtime: IAgentRuntime) {
     super();
-    logger.info('HyperfyService instance created')
+    console.info('HyperfyService instance created')
   }
 
   private entityAddedListener = (entity: any): void => {
     if (!entity || !entity.id) return
     if (entity?.data?.type === 'player' && entity.data.name) {
         if (!this.playerNamesMap.has(entity.id)) {
-            logger.info(`[Name Map Add] Setting initial name for ID ${entity.id}: '${entity.data.name}'`)
+            console.info(`[Name Map Add] Setting initial name for ID ${entity.id}: '${entity.data.name}'`)
             this.playerNamesMap.set(entity.id, entity.data.name)
         }
     }
     this.currentEntities.set(entity.id, this.extractEntityState(entity))
-    logger.debug(`[Entity Listener] Added/Updated entity: ${entity.id}`)
+    console.debug(`[Entity Listener] Added/Updated entity: ${entity.id}`)
   }
 
   private entityModifiedListener = (entityId: string, changedData: any, entity?: any): void => {
@@ -100,21 +100,21 @@ export class HyperfyService extends Service {
       if (changedData?.name && fullEntity?.data?.type === 'player') {
           const currentName = this.playerNamesMap.get(entityId)
           if (currentName !== changedData.name) {
-              logger.info(`[Name Map Update] Updating name for ID ${entityId}: '${changedData.name}'`)
+              console.info(`[Name Map Update] Updating name for ID ${entityId}: '${changedData.name}'`)
               this.playerNamesMap.set(entityId, changedData.name)
           }
       }
       if (fullEntity) {
         this.currentEntities.set(entityId, this.extractEntityState(fullEntity))
-        logger.debug(`[Entity Listener] Modified entity: ${entityId}`)
+        console.debug(`[Entity Listener] Modified entity: ${entityId}`)
       } else {
         const existing = this.currentEntities.get(entityId)
         if (existing) {
-            logger.warn(`[Entity Listener] Modified entity ${entityId} but full entity data unavailable.`)
+            console.warn(`[Entity Listener] Modified entity ${entityId} but full entity data unavailable.`)
             const potentialNewState = this.extractEntityState({ id: entityId, data: { ...existing, ...changedData } })
             this.currentEntities.set(entityId, potentialNewState)
         } else {
-            logger.warn(`[Entity Listener] Modified non-tracked entity: ${entityId}`)
+            console.warn(`[Entity Listener] Modified non-tracked entity: ${entityId}`)
         }
       }
   }
@@ -122,56 +122,57 @@ export class HyperfyService extends Service {
   private entityRemovedListener = (entityId: string): void => {
       if (!entityId) return
       if (this.playerNamesMap.has(entityId)) {
-          logger.info(`[Name Map Update] Removing name for ID ${entityId}`)
+          console.info(`[Name Map Update] Removing name for ID ${entityId}`)
           this.playerNamesMap.delete(entityId)
       }
       if(this.currentEntities.delete(entityId)){
-        logger.debug(`[Entity Listener] Removed entity: ${entityId}`)
+        console.debug(`[Entity Listener] Removed entity: ${entityId}`)
       }
   }
 
   static async start(runtime: IAgentRuntime): Promise<HyperfyService> {
-    logger.info('*** Starting Hyperfy service ***')
+    console.info('*** Starting Hyperfy service ***')
     const service = new HyperfyService(runtime)
-    logger.info(`Attempting automatic connection to default Hyperfy URL: ${HYPERFY_WS_URL}`)
+    console.info(`Attempting automatic connection to default Hyperfy URL: ${HYPERFY_WS_URL}`)
     const defaultWorldId = createUniqueUuid(runtime, runtime.agentId + '-default-hyperfy') as UUID
     const authToken: string | undefined = undefined
 
     service
       .connect({ wsUrl: HYPERFY_WS_URL, worldId: defaultWorldId, authToken })
-      .then(() => logger.info(`Automatic Hyperfy connection initiated.`))
-      .catch(err => logger.error(`Automatic Hyperfy connection failed: ${err.message}`))
+      .then(() => console.info(`Automatic Hyperfy connection initiated.`))
+      .catch(err => console.error(`Automatic Hyperfy connection failed: ${err.message}`))
 
     return service
   }
 
   static async stop(runtime: IAgentRuntime): Promise<void> {
-    logger.info('*** Stopping Hyperfy service ***')
+    console.info('*** Stopping Hyperfy service ***')
     const service = runtime.getService<HyperfyService>(HyperfyService.serviceType)
     if (service) await service.stop()
-    else logger.warn('Hyperfy service not found during stop.')
+    else console.warn('Hyperfy service not found during stop.')
   }
 
   async connect(config: { wsUrl: string; authToken?: string; worldId: UUID }): Promise<void> {
     if (this.isConnectedState) {
-      logger.warn(`HyperfyService already connected to world ${this._currentWorldId}. Disconnecting first.`)
+      console.warn(`HyperfyService already connected to world ${this._currentWorldId}. Disconnecting first.`)
       await this.disconnect()
     }
 
-    logger.info(`Attempting to connect HyperfyService to ${config.wsUrl} for world ${config.worldId}`)
+    console.info(`Attempting to connect HyperfyService to ${config.wsUrl} for world ${config.worldId}`)
     this.wsUrl = config.wsUrl
     this._currentWorldId = config.worldId
     this.appearanceSet = false
+    this.nameSet = false
     this.isPhysicsSetup = false
 
     try {
-      logger.info("[Hyperfy Connect] Loading PhysX...")
+      console.info("[Hyperfy Connect] Loading PhysX...")
       this.PHYSX = await loadNodePhysX()
       if (!this.PHYSX) {
         throw new Error("Failed to load PhysX.")
       }
       ;(globalThis as any).PHYSX = this.PHYSX
-      logger.info("[Hyperfy Connect] PhysX loaded. Extending THREE...")
+      console.info("[Hyperfy Connect] PhysX loaded. Extending THREE...")
 
       const world = createClientWorld()
       this.world = world
@@ -208,14 +209,12 @@ export class HyperfyService extends Service {
         throw new Error('world.init is not a function')
       }
       await this.world.init(hyperfyConfig)
-      logger.info('Hyperfy world initialized.')
+      console.info('Hyperfy world initialized.')
 
-      logger.info("[Hyperfy Connect] World initialized. Setting up listeners, physics, and appearance...")
-
-      await this.setupStaticPhysicsFromEnvironment()
+      console.info("[Hyperfy Connect] World initialized. Setting up listeners, physics, and appearance...")
 
       if (this.world?.entities && typeof this.world.entities.on === 'function') {
-        logger.info('[Hyperfy Connect] Attaching entity listeners...')
+        console.info('[Hyperfy Connect] Attaching entity listeners...')
         this.world.entities.off('entityAdded', this.entityAddedListener.bind(this))
         this.world.entities.off('entityModified', this.entityModifiedListener.bind(this))
         this.world.entities.off('entityRemoved', this.entityRemovedListener.bind(this))
@@ -229,21 +228,26 @@ export class HyperfyService extends Service {
         this.world.entities.items?.forEach((entity: any, id: string) => {
              this.entityAddedListener(entity)
          })
-        logger.info(`[Hyperfy Connect] Initial entity count: ${this.currentEntities.size}, Player names: ${this.playerNamesMap.size}`)
+        console.info(`[Hyperfy Connect] Initial entity count: ${this.currentEntities.size}, Player names: ${this.playerNamesMap.size}`)
       } else {
-         logger.warn("[Hyperfy Connect] world.entities or world.entities.on not available for listener attachment.")
+         console.warn("[Hyperfy Connect] world.entities or world.entities.on not available for listener attachment.")
       }
 
       this.processedMsgIds.clear()
       if (this.world.chat?.msgs) {
-        logger.info(`Processing ${this.world.chat.msgs.length} existing chat messages.`)
+        console.info(`Processing ${this.world.chat.msgs.length} existing chat messages.`)
         this.world.chat.msgs.forEach((msg: any) => {
           if (msg && msg.id) {
             this.processedMsgIds.add(msg.id)
           }
         })
-        logger.info(`Populated ${this.processedMsgIds.size} processed message IDs from history.`)
+        console.info(`Populated ${this.processedMsgIds.size} processed message IDs from history.`)
       }
+
+      // ---> Moved Physics Setup Here <--- 
+      // Wait for world systems and potentially initial snapshot data before setting up physics
+      await this.setupStaticPhysicsFromEnvironment()
+      // ----------------------------------
 
       this.subscribeToHyperfyEvents()
 
@@ -254,15 +258,11 @@ export class HyperfyService extends Service {
 
       this.startAppearancePolling()
 
-      if (ENABLE_HYPERFY_TEST_MODE_FLAG) {
-        logger.info('Starting Hyperfy Test Mode (Random Movement & Chat)')
-        this.startRandomMovement()
-        this.startRandomChatting()
-      }
+      this.connectionTime = Date.now(); // Record connection time
 
-      logger.info(`HyperfyService connected successfully to ${this.wsUrl}`)
+      console.info(`HyperfyService connected successfully to ${this.wsUrl}`)
     } catch (error: any) {
-      logger.error(`HyperfyService connection failed for ${config.worldId} at ${config.wsUrl}: ${error.message}`, error.stack)
+      console.error(`HyperfyService connection failed for ${config.worldId} at ${config.wsUrl}: ${error.message}`, error.stack)
       await this.handleDisconnect()
       throw error
     }
@@ -270,14 +270,14 @@ export class HyperfyService extends Service {
 
   private subscribeToHyperfyEvents(): void {
     if (!this.world || typeof this.world.on !== 'function') {
-        logger.warn("[Hyperfy Events] Cannot subscribe: World or world.on not available.")
+        console.warn("[Hyperfy Events] Cannot subscribe: World or world.on not available.")
         return
     }
 
     this.world.off('disconnect')
 
     this.world.on('disconnect', (reason: string) => {
-      logger.warn(`Hyperfy world disconnected: ${reason}`)
+      console.warn(`Hyperfy world disconnected: ${reason}`)
       this.runtime.emitEvent(EventType.WORLD_LEFT, {
         runtime: this.runtime,
         eventName: 'HYPERFY_DISCONNECTED',
@@ -289,24 +289,24 @@ export class HyperfyService extends Service {
     if (this.world.chat?.subscribe) {
       this.startChatSubscription()
     } else {
-        logger.warn('[Hyperfy Events] world.chat.subscribe not available.')
+        console.warn('[Hyperfy Events] world.chat.subscribe not available.')
     }
   }
 
   private async setupStaticPhysicsFromEnvironment(): Promise<void> {
     if (this.isPhysicsSetup) {
-        logger.info("[Physics Setup] Skipping: Already setup.")
+        console.info("[Physics Setup] Skipping: Already setup.")
         return
     }
      if (!this.world || !this.PHYSX) {
-        logger.warn("[Physics Setup] Skipping: World or PhysX not ready.")
+        console.warn("[Physics Setup] Skipping: World or PhysX not ready.")
         return
     }
-    logger.info("[Physics Setup] Setting up static environment geometry...")
+    console.info("[Physics Setup] Setting up static environment geometry...")
 
     const physicsSystem = this.world.physics
     if (!physicsSystem || !physicsSystem.physics || !physicsSystem.scene || !physicsSystem.material) {
-        logger.error("[Physics Setup] Physics system components (physics, scene, material) not ready in world instance.")
+        console.error("[Physics Setup] Physics system components (physics, scene, material) not ready in world instance.")
         return
     }
      const physics = physicsSystem.physics
@@ -315,24 +315,24 @@ export class HyperfyService extends Service {
 
     const envModelUrl = this.world.settings?.model?.url
     if (!envModelUrl) {
-        logger.warn("[Physics Setup] No environment model URL found in world settings.")
+        console.warn("[Physics Setup] No environment model URL found in world settings.")
         this.isPhysicsSetup = true
         return
     }
 
     try {
-        logger.info(`[Physics Setup] Loading environment model: ${envModelUrl}`)
+        console.info(`[Physics Setup] Loading environment model: ${envModelUrl}`)
         if (!this.world.loader || typeof this.world.loader.load !== 'function') {
             throw new Error("world.loader.load is not available.")
         }
         const envGltf = await this.world.loader.load('model', envModelUrl)
-        logger.info(`[Physics Setup] Environment model loaded successfully.`)
+        console.info(`[Physics Setup] Environment model loaded successfully.`)
 
         if (!envGltf || !envGltf.scene) {
             throw new Error("Loaded GLTF is invalid or has no scene.")
         }
 
-        logger.info("[Physics Setup] PhysX components obtained from world instance.")
+        console.info("[Physics Setup] PhysX components obtained from world instance.")
 
         const physxTransform = new this.PHYSX.PxTransform(this.PHYSX.PxIdentityEnum.PxIdentity)
         let meshesProcessed = 0
@@ -343,7 +343,7 @@ export class HyperfyService extends Service {
 
         envGltf.scene.traverseVisible((node: any) => {
             if (node instanceof THREE.Mesh && node.geometry) {
-                logger.debug(`[Physics Setup] Processing mesh: ${node.name || '(unnamed)'}`)
+                console.debug(`[Physics Setup] Processing mesh: ${node.name || '(unnamed)'}`)
                 meshesProcessed++
                 let pmeshHandle: any = null
                 try {
@@ -394,10 +394,10 @@ export class HyperfyService extends Service {
                     staticActor.attachShape(shape)
                     scene.addActor(staticActor)
                     actorsAdded++
-                    logger.debug(`[Physics Setup] Added static actor for ${node.name || '(unnamed)'}.`)
+                    console.debug(`[Physics Setup] Added static actor for ${node.name || '(unnamed)'}.`)
 
                 } catch (error: any) {
-                    logger.error(`[Physics Setup] Error processing mesh ${node.name || '(unnamed)'}:`, error)
+                    console.error(`[Physics Setup] Error processing mesh ${node.name || '(unnamed)'}:`, error)
                     traversalErrors.push(error)
                 } finally {
                     pmeshHandle?.release?.()
@@ -406,22 +406,22 @@ export class HyperfyService extends Service {
         })
 
         if (traversalErrors.length > 0) {
-            logger.warn(`[Physics Setup] Finished. Meshes processed: ${meshesProcessed}, Actors added: ${actorsAdded}, Errors: ${traversalErrors.length}.`)
+            console.warn(`[Physics Setup] Finished. Meshes processed: ${meshesProcessed}, Actors added: ${actorsAdded}, Errors: ${traversalErrors.length}.`)
         } else {
-            logger.info(`[Physics Setup] Finished successfully. Meshes processed: ${meshesProcessed}, Actors added: ${actorsAdded}.`)
+            console.info(`[Physics Setup] Finished successfully. Meshes processed: ${meshesProcessed}, Actors added: ${actorsAdded}.`)
         }
         this.isPhysicsSetup = true
 
     } catch (error: any) {
-        logger.error(`[Physics Setup] Failed to load or process environment model ${envModelUrl}:`, error)
+        console.error(`[Physics Setup] Failed to load or process environment model ${envModelUrl}:`, error)
         this.isPhysicsSetup = true
     }
   }
 
-  private async uploadAndSetAvatar(): Promise<boolean> {
+  private async uploadAndSetAvatar(): Promise<{ success: boolean, error?: string }> {
     if (!this.world || !this.world.entities?.player || !this.world.network || !this.world.assetsUrl) {
-        logger.warn("[Appearance] Cannot set avatar: World, player, network, or assetsUrl not ready.")
-        return false
+        console.warn("[Appearance] Cannot set avatar: World, player, network, or assetsUrl not ready.");
+        return { success: false, error: "Prerequisites not met" };
     }
 
     const agentPlayer = this.world.entities.player
@@ -429,117 +429,171 @@ export class HyperfyService extends Service {
     const localAvatarPath = path.resolve(LOCAL_AVATAR_PATH)
 
     try {
-        logger.info(`[Appearance] Reading avatar file from: ${localAvatarPath}`)
+        console.info(`[Appearance] Reading avatar file from: ${localAvatarPath}`)
         const fileBuffer: Buffer = await fs.readFile(localAvatarPath)
         fileName = path.basename(localAvatarPath)
         const mimeType = fileName.endsWith('.vrm') ? 'model/gltf-binary' : 'application/octet-stream'
 
-        logger.info(`[Appearance] Uploading ${fileName} (${(fileBuffer.length / 1024).toFixed(2)} KB, Type: ${mimeType})...`)
+        console.info(`[Appearance] Uploading ${fileName} (${(fileBuffer.length / 1024).toFixed(2)} KB, Type: ${mimeType})...`)
 
         if (!crypto.subtle || typeof crypto.subtle.digest !== 'function') {
-            throw new Error("crypto.subtle.digest is not available. Ensure Node.js version supports Web Crypto API.")
+            throw new Error("crypto.subtle.digest is not available. Ensure Node.js version supports Web Crypto API.");
         }
-        const hash = await hashFileBuffer(fileBuffer)
-        const ext = fileName.split('.').pop()?.toLowerCase() || 'vrm'
-        const baseUrl = this.world.assetsUrl.replace(/\/$/, '')
-        const constructedHttpUrl = `${baseUrl}/${hash}.${ext}`
-        logger.info(`[Appearance] Constructed HTTP(S) URL: ${constructedHttpUrl}`)
+        const hash = await hashFileBuffer(fileBuffer);
+        const ext = fileName.split('.').pop()?.toLowerCase() || 'vrm';
+        const fullFileNameWithHash = `${hash}.${ext}`;
+        const baseUrl = this.world.assetsUrl.replace(/\/$/, '');
+        const constructedHttpUrl = `${baseUrl}/${fullFileNameWithHash}`;
+        console.info(`[Appearance] Constructed HTTP(S) URL: ${constructedHttpUrl}`)
 
+        // --- Perform Upload and Server Update --- >
+        let uploadSuccessful = false;
         if (typeof this.world.network.upload === 'function') {
-           logger.info("[Appearance] Calling world.network.upload with Node Buffer...")
+           console.info(`[Appearance] Calling world.network.upload for ${fullFileNameWithHash}...`);
+            try {
+                const uploadPromise = this.world.network.upload({ 
+                    buffer: fileBuffer, 
+                    name: fileName, // Original filename might still be needed by upload func
+                    type: mimeType, 
+                    size: fileBuffer.length,
+                });
 
-           // Revert to passing the Node.js Buffer directly, like in index.mjs
-           const uploadData = {
-               buffer: fileBuffer, // <-- Pass the original Node.js Buffer
-               name: fileName,
-               type: mimeType,
-               size: fileBuffer.length
-           };
+                // Add a timeout for the upload operation (e.g., 30 seconds)
+                const UPLOAD_TIMEOUT_MS = 30000;
+                const timeoutPromise = new Promise((_resolve, reject) => 
+                    setTimeout(() => reject(new Error('Upload timed out')), UPLOAD_TIMEOUT_MS)
+                );
 
-           await this.world.network.upload(uploadData) // Pass the object with the Node.js Buffer
-           logger.info(`[Appearance] Upload process likely initiated.`)
+                // Assume upload returns a promise that resolves on success
+                await Promise.race([uploadPromise, timeoutPromise]);
+
+                // --- Add logging immediately after await --- >
+                console.info(`[Appearance] Awaited world.network.upload successfully finished for ${fullFileNameWithHash}.`);
+                // <-------------------------------------------
+
+                console.info(`[Appearance] world.network.upload completed for ${fullFileNameWithHash}.`);
+                uploadSuccessful = true;
+             } catch (uploadError: any) {
+                console.error(`[Appearance] world.network.upload failed: ${uploadError.message}`, uploadError.stack);
+                // Don't throw here, let the function return failure status
+                return { success: false, error: `Upload failed: ${uploadError.message}` };
+           }
         } else {
-           logger.warn("[Appearance] world.network.upload function not found. Assuming URL is sufficient.")
+           console.warn("[Appearance] world.network.upload function not found. Cannot upload.");
+            return { success: false, error: "Upload function unavailable" }; // Cannot proceed without upload
         }
 
-        if (this.world.network && typeof this.world.network.send === 'function') {
-            // Send the message to the server
-            this.world.network.send('playerSessionAvatar', { avatar: constructedHttpUrl })
-            logger.info(`[Appearance] Sent playerSessionAvatar network message with: ${constructedHttpUrl}`)
-
-            // --- Apply change locally immediately --- >
-            if (agentPlayer && typeof agentPlayer.setSessionAvatar === 'function') {
-                 logger.info(`[Appearance] Applying session avatar locally: ${constructedHttpUrl}`);
-                 agentPlayer.setSessionAvatar(constructedHttpUrl);
-            } else {
-                 logger.warn("[Appearance] agentPlayer.setSessionAvatar not available for local application.");
-            }
-            // <---------------------------------------
-
-            return true // Return success after sending and attempting local apply
-        }
-        else if (agentPlayer && typeof agentPlayer.setSessionAvatar === 'function') {
-            // This path is likely less common now, but keep as fallback
-            logger.warn("[Appearance] Using agentPlayer.setSessionAvatar locally as fallback (network.send unavailable).")
-            agentPlayer.setSessionAvatar(constructedHttpUrl)
-            logger.info(`[Appearance] Called agentPlayer.setSessionAvatar with: ${constructedHttpUrl}`)
-            return true
+        // --- Apply change locally *AFTER* successful upload --- >
+        if (uploadSuccessful && agentPlayer && typeof agentPlayer.setSessionAvatar === 'function') {
+             console.info(`[Appearance] Applying session avatar locally (post-upload): ${constructedHttpUrl}`);
+             agentPlayer.setSessionAvatar(constructedHttpUrl);
+        } else if (uploadSuccessful) {
+             // Still log warning if function is missing, even post-upload
+             console.warn("[Appearance] agentPlayer.setSessionAvatar not available for local application (post-upload).");
         } else {
-            throw new Error("Neither world.network.send nor agentPlayer.setSessionAvatar available.")
+            // If upload failed, we don't apply locally
+             logger.debug("[Appearance] Skipping local avatar application due to upload failure.")
+        }
+        // <---------------------------------------------------
+
+        // Only send network message if upload was successful
+        if (uploadSuccessful && this.world.network && typeof this.world.network.send === 'function') {
+            this.world.network.send('playerSessionAvatar', { avatar: constructedHttpUrl });
+            console.info(`[Appearance] Sent playerSessionAvatar network message with: ${constructedHttpUrl}`);
+            return { success: true }; // Indicate overall success
+        } else if (!uploadSuccessful) {
+            // This case is handled by the return inside the upload try-catch
+            return { success: false, error: "Upload did not succeed (state unknown)" }; 
+        } else {
+             console.error("[Appearance] Upload succeeded but world.network.send is not available.");
+             return { success: false, error: "Network send unavailable after upload" };
         }
 
     } catch (error: any) {
         if (error.code === 'ENOENT') {
-            logger.error(`[Appearance] Error: Avatar file not found at ${localAvatarPath}. CWD: ${process.cwd()}`)
+            console.error(`[Appearance] Error: Avatar file not found at ${localAvatarPath}. CWD: ${process.cwd()}`)
         } else {
-            logger.error("[Appearance] Error during avatar upload/set process:", error.message, error.stack)
+            console.error("[Appearance] Unexpected error during avatar process:", error.message, error.stack)
         }
-        return false
+        return { success: false, error: error.message };
     }
   }
 
   private startAppearancePolling(): void {
-    if (this.appearanceIntervalId) clearInterval(this.appearanceIntervalId)
-    if (this.appearanceSet) {
-        logger.info("[Appearance Polling] Already set, skipping start.")
-        return
+    if (this.appearanceIntervalId) clearInterval(this.appearanceIntervalId);
+    // Check if both are already set
+    let pollingTasks = { avatar: this.appearanceSet, name: this.nameSet }; // Track tasks locally
+
+    if (pollingTasks.avatar && pollingTasks.name) {
+        console.info("[Appearance/Name Polling] Already set, skipping start.");
+        return;
     }
-    logger.info(`[Appearance Polling] Initializing interval every ${HYPERFY_APPEARANCE_POLL_INTERVAL}ms.`)
+    console.info(`[Appearance/Name Polling] Initializing interval every ${HYPERFY_APPEARANCE_POLL_INTERVAL}ms.`);
 
-    this.appearanceIntervalId = setInterval(async () => {
-        if (this.appearanceSet) {
-            if (this.appearanceIntervalId) clearInterval(this.appearanceIntervalId)
-            this.appearanceIntervalId = null
-            return
+    
+    const f = async () => {
+        // Stop polling if both tasks are complete
+        if (pollingTasks.avatar && pollingTasks.name) {
+            if (this.appearanceIntervalId) clearInterval(this.appearanceIntervalId);
+            this.appearanceIntervalId = null;
+            console.info(`[Appearance/Name Polling] Both avatar and name set. Polling stopped.`);
+            return;
         }
 
-        const agentPlayerReady = !!this.world?.entities?.player
-        const networkReady = this.world?.network?.id != null
-        const assetsUrlReady = !!this.world?.assetsUrl
+        const agentPlayer = this.world?.entities?.player; // Get player once
+        const agentPlayerReady = !!agentPlayer;
+        const agentPlayerId = agentPlayer?.data?.id;
+        const agentPlayerIdReady = !!agentPlayerId;
+        const networkReady = this.world?.network?.id != null;
+        const assetsUrlReady = !!this.world?.assetsUrl; // Needed for avatar
 
-        if (agentPlayerReady && networkReady && assetsUrlReady) {
-            logger.info(`[Appearance Polling] Player, network, and assetsUrl ready. Attempting to upload and set avatar...`)
-            const success = await this.uploadAndSetAvatar()
+        // Condition checks player/ID/network readiness for name, adds assetsUrl for avatar
+        console.log('agentPlayerReady', agentPlayerReady)
+        console.log('agentPlayerIdReady', agentPlayerIdReady)
+        console.log('networkReady', networkReady)
+        if (agentPlayerReady && agentPlayerIdReady && networkReady) {
+             // --- Set Name (if not already done) ---
+             if (!pollingTasks.name) {
+                 console.info(`[Name Polling] Player (ID: ${agentPlayerId}), network ready. Attempting name...`);
+                 try {
+                    await this.changeName(this.runtime.character.name);
+                    this.nameSet = true; // Update global state
+                    pollingTasks.name = true; // Update local task tracker
+                    console.info(`[Name Polling] Initial name successfully set to "${this.runtime.character.name}".`);
+                 } catch (error) {
+                     console.error(`[Name Polling] Failed to set initial name:`, error);
+                 }
+             }
 
-            if (success) {
-                this.appearanceSet = true
-                if (this.appearanceIntervalId) clearInterval(this.appearanceIntervalId)
-                this.appearanceIntervalId = null
-                logger.info(`[Appearance Polling] Avatar successfully set. Polling stopped.`)
-            } else {
-                logger.warn(`[Appearance Polling] Avatar setting failed, will retry...`)
-            }
+             // --- Set Avatar (if not already done AND assets URL ready) ---
+             if (!pollingTasks.avatar && assetsUrlReady) {
+                 console.info(`[Appearance Polling] Player (ID: ${agentPlayerId}), network, assetsUrl ready. Attempting avatar upload and set...`);
+                 const result = await this.uploadAndSetAvatar();
+
+                 if (result.success) {
+                     this.appearanceSet = true; // Update global state
+                     pollingTasks.avatar = true; // Update local task tracker
+                     console.info(`[Appearance Polling] Avatar setting process successfully completed.`);
+                 } else {
+                     console.warn(`[Appearance Polling] Avatar setting process failed: ${result.error || 'Unknown reason'}. Will retry...`);
+                 }
+             } else if (!pollingTasks.avatar) {
+                  console.debug(`[Appearance Polling] Waiting for: Assets URL (${assetsUrlReady})...`);
+             }
         } else {
-             logger.debug(`[Appearance Polling] Waiting for: Player (${agentPlayerReady}), Network (${networkReady}), Assets URL (${assetsUrlReady})...`)
+             // Update waiting log
+             console.debug(`[Appearance/Name Polling] Waiting for: Player (${agentPlayerReady}), Player ID (${agentPlayerIdReady}), Network (${networkReady})...`);
         }
-    }, HYPERFY_APPEARANCE_POLL_INTERVAL)
+    }
+    this.appearanceIntervalId = setInterval(f, HYPERFY_APPEARANCE_POLL_INTERVAL);
+    f();
   }
 
   private stopAppearancePolling(): void {
     if (this.appearanceIntervalId) {
         clearInterval(this.appearanceIntervalId)
         this.appearanceIntervalId = null
-        logger.info("[Appearance Polling] Stopped.")
+        console.info("[Appearance Polling] Stopped.")
     }
   }
 
@@ -636,17 +690,16 @@ export class HyperfyService extends Service {
 
   async handleDisconnect(): Promise<void> {
       if (!this.isConnectedState && !this.world) return
-      logger.info('Handling Hyperfy disconnection...')
+      console.info('Handling Hyperfy disconnection...')
       this.isConnectedState = false
 
       this.stopSimulation()
       this.stopEntityUpdates()
-      this.stopRandomMovement()
       this.stopRandomChatting()
       this.stopAppearancePolling()
 
       if (this.world?.entities && typeof this.world.entities.off === 'function') {
-          logger.info("[Hyperfy Cleanup] Removing entity listeners...")
+          console.info("[Hyperfy Cleanup] Removing entity listeners...")
           this.world.entities.off('entityAdded', this.entityAddedListener.bind(this))
           this.world.entities.off('entityModified', this.entityModifiedListener.bind(this))
           this.world.entities.off('entityRemoved', this.entityRemovedListener.bind(this))
@@ -655,15 +708,15 @@ export class HyperfyService extends Service {
       if (this.world) {
           try {
               if (this.world.network && typeof this.world.network.disconnect === 'function') {
-                  logger.info("[Hyperfy Cleanup] Calling network.disconnect()...")
+                  console.info("[Hyperfy Cleanup] Calling network.disconnect()...")
                   await this.world.network.disconnect()
               }
               if (typeof this.world.destroy === 'function') {
-                  logger.info("[Hyperfy Cleanup] Calling world.destroy()...")
+                  console.info("[Hyperfy Cleanup] Calling world.destroy()...")
                   this.world.destroy()
               }
           } catch (e: any) {
-              logger.warn(`[Hyperfy Cleanup] Error during world network disconnect/destroy: ${e.message}`)
+              console.warn(`[Hyperfy Cleanup] Error during world network disconnect/destroy: ${e.message}`)
           }
       }
 
@@ -679,41 +732,53 @@ export class HyperfyService extends Service {
 
       this.processedMsgIds.clear()
 
+      this.connectionTime = null; // Clear connection time
+
       if (this.tickIntervalId) { clearTimeout(this.tickIntervalId); this.tickIntervalId = null; }
       if (this.entityUpdateIntervalId) { clearInterval(this.entityUpdateIntervalId); this.entityUpdateIntervalId = null; }
       if (this.randomMoveIntervalId) { clearInterval(this.randomMoveIntervalId); this.randomMoveIntervalId = null; }
       if (this.randomChatIntervalId) { clearInterval(this.randomChatIntervalId); this.randomChatIntervalId = null; }
       if (this.appearanceIntervalId) { clearInterval(this.appearanceIntervalId); this.appearanceIntervalId = null; }
 
-      logger.info('Hyperfy disconnection handling complete.')
+      console.info('Hyperfy disconnection handling complete.')
   }
 
   async disconnect(): Promise<void> {
-      logger.info(`Disconnecting HyperfyService from world ${this._currentWorldId}`)
+      console.info(`Disconnecting HyperfyService from world ${this._currentWorldId}`)
       await this.handleDisconnect()
-      logger.info('HyperfyService disconnect complete.')
+      console.info('HyperfyService disconnect complete.')
   }
 
   getState(): { entities: Map<string, any>; agent: any, status: string } {
       const agentStateCopy = this.agentState ? JSON.parse(JSON.stringify(this.agentState)) : {}
 
       return {
-          entities: this.currentEntities,
+          entities: new Map(this.currentEntities),
           agent: agentStateCopy,
           status: this.isConnectedState ? 'connected' : 'disconnected'
        }
   }
 
+  /**
+   * Returns the current map of known entities and their states.
+   * The key is the entity ID, the value is the cached entity state.
+   * @returns {Map<string, any>} A map of entity IDs to their state objects.
+   */
+  public getEntities(): Map<string, any> {
+      return new Map(this.currentEntities);
+  }
+
   async sendMessage(text: string): Promise<void> {
     if (!this.isConnected() || !this.world?.chat || !this.world?.entities?.player) {
-      throw new Error('HyperfyService: Cannot send message. Not ready.')
+      console.error('HyperfyService: Cannot send message. Not ready.')
+      return
     }
 
     try {
-      const agentPlayerId = this.world.entities.player.id
+      const agentPlayerId = this.world.entities.player.data.id
       const agentPlayerName = this.getEntityName(agentPlayerId) || this.world.entities.player.data?.name || 'Hyperliza'
 
-      logger.info(`HyperfyService sending message: "${text}" as ${agentPlayerName} (${agentPlayerId})`)
+      console.info(`HyperfyService sending message: "${text}" as ${agentPlayerName} (${agentPlayerId})`)
 
       if (typeof this.world.chat.add !== 'function') {
         throw new Error('world.chat.add is not a function')
@@ -727,8 +792,9 @@ export class HyperfyService extends Service {
         },
         true
       )
+
     } catch (error: any) {
-      logger.error('Error sending Hyperfy message:', error.message, error.stack)
+      console.error('Error sending Hyperfy message:', error.message, error.stack)
       throw error
     }
   }
@@ -737,12 +803,110 @@ export class HyperfyService extends Service {
     if (!this.isConnected() || !this.controls) throw new Error('HyperfyService: Cannot move. Not connected or controls unavailable.')
     if (typeof this.controls.setKey !== 'function') throw new Error('HyperfyService: controls.setKey method is missing.')
     try {
-      logger.debug(`HyperfyService move: key=${key}, isDown=${isDown}`)
+      console.debug(`HyperfyService move: key=${key}, isDown=${isDown}`)
       this.controls.setKey(key, isDown)
     } catch (error: any) {
-      logger.error('Error setting key:', error.message, error.stack)
+      console.error('Error setting key:', error.message, error.stack)
       throw error
     }
+  }
+
+  /**
+   * Attempts to play an emote using its URL.
+   */
+  async emote(emoteUrl: string): Promise<void> {
+    if (!this.isConnected() || !this.world?.entities?.player) {
+      throw new Error('HyperfyService: Cannot play emote. Player not ready.');
+    }
+    const player = this.world.entities.player;
+
+    // PlayerLocal has a playEmote method
+    if (typeof player.playEmote === 'function') {
+       console.info(`[Action] Attempting to play emote: ${emoteUrl}`);
+       try {
+            player.playEmote(emoteUrl);
+       } catch (error: any) {
+            console.error(`[Action] Error calling player.playEmote: ${error.message}`, error.stack);
+            throw error;
+       }
+    } else {
+       console.warn('[Action] player.playEmote method not found.');
+       throw new Error('HyperfyService: Emote functionality not available on player entity.');
+    }
+  }
+
+  /**
+   * Simulates using an item by pressing a number key (1-9).
+   */
+  async useItem(slot: number): Promise<void> {
+     if (!this.isConnected() || !this.controls) {
+       throw new Error('HyperfyService: Cannot use item. Controls not ready.');
+     }
+     if (slot < 1 || slot > 9) {
+        throw new Error(`HyperfyService: Invalid item slot ${slot}. Must be between 1 and 9.`);
+     }
+     if (typeof this.controls.setKey !== 'function') {
+        throw new Error('HyperfyService: controls.setKey method is missing.');
+     }
+
+     const keyName = `key${slot}`;
+     console.info(`[Action] Simulating 'Use Item' action (Pressing '${keyName}' briefly)`);
+
+     try {
+        this.controls.setKey(keyName, true);
+        // Short delay to simulate a press
+        await new Promise(resolve => setTimeout(resolve, 100));
+        this.controls.setKey(keyName, false);
+        console.info(`[Action] 'Use Item' simulation complete (Released '${keyName}').`);
+     } catch (error: any) {
+        console.error(`[Action] Error during useItem simulation for slot ${slot}:`, error);
+        // Attempt to release the key even if there was an error during the wait
+        try {
+             this.controls.setKey(keyName, false);
+        } catch (releaseError) {
+             console.error(`[Action] Failed to release ${keyName} key after error:`, releaseError);
+        }
+        throw error; // Re-throw original error
+     }
+  }
+
+  /**
+   * Changes the agent's display name.
+   */
+  async changeName(newName: string): Promise<void> {
+      if (!this.isConnected() || !this.world?.network || !this.world?.entities?.player) {
+          throw new Error('HyperfyService: Cannot change name. Network or player not ready.');
+      }
+      const agentPlayerId = this.world.entities.player.data.id;
+      if (!agentPlayerId) {
+          throw new Error('HyperfyService: Cannot change name. Player ID not available.');
+      }
+
+      console.info(`[Action] Attempting to change name to "${newName}" for ID ${agentPlayerId}`);
+
+      try {
+
+          // 2. Update local state immediately
+          // Update the name map
+          if (this.playerNamesMap.has(agentPlayerId)) {
+               console.info(`[Name Map Update] Setting name via changeName for ID ${agentPlayerId}: '${newName}'`);
+               this.playerNamesMap.set(agentPlayerId, newName);
+          } else {
+               console.warn(`[Name Map Update] Attempted changeName for ID ${agentPlayerId} not currently in map. Adding.`);
+               this.playerNamesMap.set(agentPlayerId, newName);
+          }
+
+          // --- Use agentPlayer.modify for local update --- >
+          const agentPlayer = this.world.entities.player;
+              agentPlayer.modify({ name: newName });
+              agentPlayer.data.name = newName
+
+              console.debug(`[Action] Called agentPlayer.modify({ name: "${newName}" })`);
+
+      } catch (error: any) {
+          console.error(`[Action] Error during changeName to "${newName}":`, error);
+          throw error;
+      }
   }
 
   private startEntityUpdates(intervalMs = HYPERFY_ENTITY_UPDATE_INTERVAL): void {
@@ -751,7 +915,7 @@ export class HyperfyService extends Service {
     this.entityUpdateIntervalId = setInterval(() => {
         if (!this.isConnected() || !this.world?.entities?.player) {
              if (this.agentState.position || this.agentState.rotation) {
-                 logger.debug("[Entity Update] Clearing agent state (disconnected or player missing).")
+                 console.debug("[Entity Update] Clearing agent state (disconnected or player missing).")
                  this.agentState = { position: null, rotation: null }
              }
              return
@@ -782,23 +946,23 @@ export class HyperfyService extends Service {
         }
 
     }, intervalMs)
-    logger.info(`[Entity Update] Started interval for agent state sync every ${intervalMs}ms.`)
+    console.info(`[Entity Update] Started interval for agent state sync every ${intervalMs}ms.`)
   }
 
   private stopEntityUpdates(): void {
     if (this.entityUpdateIntervalId) {
       clearInterval(this.entityUpdateIntervalId)
       this.entityUpdateIntervalId = null
-      logger.info('[Entity Update] Stopped.')
+      console.info('[Entity Update] Stopped.')
     }
   }
 
   private logCurrentEntities(): void {
      if (!this.world || !this.currentEntities || !this.isConnectedState) return
      const entityCount = this.currentEntities.size
-     const agentPlayerId = this.world?.entities?.player?.id
+     const agentPlayerId = this.world?.entities?.player?.data?.id
 
-     logger.info(`--- [Hyperfy Service Entity Log - Time: ${this.world.time?.toFixed(2)}s] --- (${entityCount} entities) ---`)
+     console.info(`--- [Hyperfy Service Entity Log - Time: ${this.world.time?.toFixed(2)}s] --- (${entityCount} entities) ---`)
      this.currentEntities.forEach((entityState, id) => {
         let logMessage = `  ID: ${id.substring(0,8)}..., Type: ${entityState.type || 'unknown'}`
         const name = entityState.name
@@ -821,9 +985,69 @@ export class HyperfyService extends Service {
          } else {
          }
 
-        logger.info(logMessage)
+        console.info(logMessage)
      })
-     logger.info(`--- [End Hyperfy Service Entity Log] ---`)
+     console.info(`--- [End Hyperfy Service Entity Log] ---`)
+  }
+
+  /**
+   * Finds interactable actions within a certain distance of the agent.
+   * @param {number} maxDistance - The maximum distance to search for actions.
+   * @returns {Array<object>} A list of interactable actions with id, label, and distance.
+   */
+  public getInteractableActions(maxDistance: number = 3): Array<{ id: string, label: string, distance: number }> {
+      if (!this.world || !this.world.actions || !this.world.entities?.player?.base?.position) {
+          logger.warn("[Interactables] Cannot get actions: World, actions system, or player position unavailable.");
+          return [];
+      }
+
+      const playerPosition = this.world.entities.player.base.position as THREE.Vector3;
+      const interactableActions: Array<{ id: string, label: string, distance: number }> = [];
+
+      // world.actions seems to be the registry based on App.js
+      if (typeof this.world.actions.getNearby !== 'function') {
+          logger.warn("[Interactables] world.actions.getNearby is not a function. Cannot find nearby actions.");
+          // Fallback: Iterate manually if getNearby isn't available (less efficient)
+          // This assumes world.actions is iterable or has a way to access all actions
+          /*
+          if (this.world.actions instanceof Map || Array.isArray(this.world.actions)) {
+              this.world.actions.forEach((action: any) => {
+                 if (action.isAction && action.worldPos) { // Check if it's an Action node
+                      const dist = playerPosition.distanceTo(action.worldPos);
+                      if (dist <= (action.distance ?? 3) && dist <= maxDistance) {
+                          interactableActions.push({
+                              id: action.uuid, // Assuming Action node has uuid
+                              label: action.label || 'Interact',
+                              distance: dist
+                          });
+                      }
+                  }
+              });
+          } else {
+              logger.warn("[Interactables] Cannot iterate world.actions to find nearby actions manually.");
+          }
+          */
+         return []; // Return empty if getNearby isn't available
+      }
+
+       // Prefer using world.actions.getNearby if it exists
+       const nearbyActions = this.world.actions.getNearby(playerPosition, maxDistance);
+
+      for (const action of nearbyActions) {
+         // Ensure the action object has the expected properties
+         if (action.node && action.node.isAction && action.node.uuid && action.node.label) {
+              interactableActions.push({
+                  id: action.node.uuid,
+                  label: action.node.label,
+                  distance: action.distance
+              });
+          } else {
+              logger.warn("[Interactables] Found nearby action object with unexpected structure:", action);
+          }
+      }
+
+      logger.debug(`[Interactables] Found ${interactableActions.length} actions within ${maxDistance}m.`);
+      return interactableActions;
   }
 
   async triggerUseAction(holdDurationMs = 600): Promise<void> {
@@ -834,7 +1058,7 @@ export class HyperfyService extends Service {
         throw new Error('HyperfyService: controls.setKey method is missing.')
     }
 
-    logger.info(`[Action] Simulating 'Use' action (Pressing 'E' for ${holdDurationMs}ms)`)
+    console.info(`[Action] Simulating 'Use' action (Pressing 'E' for ${holdDurationMs}ms)`)
 
     try {
       this.controls.setKey('keyE', true)
@@ -842,33 +1066,33 @@ export class HyperfyService extends Service {
       await new Promise(resolve => setTimeout(resolve, holdDurationMs))
 
       this.controls.setKey('keyE', false)
-      logger.info(`[Action] 'Use' action simulation complete (Released 'E').`)
+      console.info(`[Action] 'Use' action simulation complete (Released 'E').`)
 
     } catch (error) {
-      logger.error('[Action] Error during triggerUseAction simulation:', error)
+      console.error('[Action] Error during triggerUseAction simulation:', error)
       try {
           if (this.controls && typeof this.controls.setKey === 'function') {
              this.controls.setKey('keyE', false)
           }
       } catch (releaseError) {
-          logger.error('[Action] Failed to release E key after error:', releaseError)
+          console.error('[Action] Failed to release E key after error:', releaseError)
       }
       throw error
     }
   }
 
   async stop(): Promise<void> {
-    logger.info('*** Stopping Hyperfy service instance ***')
+    console.info('*** Stopping Hyperfy service instance ***')
     await this.disconnect()
   }
 
   private startChatSubscription(): void {
     if (!this.world || !this.world.chat) {
-      logger.error('Cannot subscribe to chat: World or Chat system not available.')
+      console.error('Cannot subscribe to chat: World or Chat system not available.')
       return
     }
 
-    logger.info('[HyperfyService] Initializing chat subscription...')
+    console.info('[HyperfyService] Initializing chat subscription...')
 
     // Pre-populate processed IDs with existing messages
     this.world.chat.msgs?.forEach((msg: any) => {
@@ -879,42 +1103,53 @@ export class HyperfyService extends Service {
 
     this.world.chat.subscribe((msgs: any[]) => {
       // Wait for player entity (ensures world/chat exist too)
-      if (!this.world || !this.world.chat || !this.world.entities?.player) return
+      if (!this.world || !this.world.chat || !this.world.entities?.player || !this.connectionTime) return
 
-      const agentPlayerId = this.world.entities.player.id // Get agent's ID
+      const agentPlayerId = this.world.entities.player.data.id // Get agent's ID
       const agentPlayerName = this.getEntityName(agentPlayerId) || this.world.entities.player.data?.name || 'Hyperliza'; // Use name getter
 
       const newMessagesFound: any[] = [] // Temporary list for new messages
 
       // Step 1: Identify new messages and update processed set
       msgs.forEach((msg: any) => {
-        // Check if we've already processed this message ID
-        if (msg && msg.id && !this.processedMsgIds.has(msg.id)) {
-          newMessagesFound.push(msg) // Add the full message object
-          this.processedMsgIds.add(msg.id) // Mark ID as processed immediately
+        // Check timestamp FIRST - only consider messages newer than connection time
+        const messageTimestamp = msg.date ? msg.date * 1000 : 0; // msg.date is in seconds
+        if (!messageTimestamp || messageTimestamp <= this.connectionTime) {
+            // console.debug(`[Chat Sub] Ignoring historical/old message ID ${msg?.id} (ts: ${messageTimestamp})`);
+            // Ensure historical messages are marked processed if encountered *before* connectionTime was set (edge case)
+            if (msg?.id && !this.processedMsgIds.has(msg.id.toString())) {
+                 this.processedMsgIds.add(msg.id.toString());
+            }
+            return; // Skip this message
+        }
+
+        // Check if we've already processed this message ID (secondary check for duplicates)
+        const msgIdStr = msg.id?.toString();
+        if (msgIdStr && !this.processedMsgIds.has(msgIdStr)) {
+           newMessagesFound.push(msg) // Add the full message object
+           this.processedMsgIds.add(msgIdStr) // Mark ID as processed immediately
         }
       })
 
       // Step 2: Process only the newly found messages
       if (newMessagesFound.length > 0) {
-        logger.info(`[Chat] Found ${newMessagesFound.length} new messages to process.`)
+        console.info(`[Chat] Found ${newMessagesFound.length} new messages to process.`)
 
         newMessagesFound.forEach(async (msg: any) => {
           const senderName = msg.from || 'System'
           const messageBody = msg.body || ''
-          logger.info(`[Chat Received] From: ${senderName}, ID: ${msg.id}, Body: "${messageBody}"`)
+          console.info(`[Chat Received] From: ${senderName}, ID: ${msg.id}, Body: "${messageBody}"`)
 
           // Respond only to messages not from the agent itself
           if (msg.fromId !== agentPlayerId) {
-            try {
-              logger.info(`[Hyperfy Chat] Processing message from ${senderName}`)
+              console.info(`[Hyperfy Chat] Processing message from ${senderName}`)
 
               // First, ensure we register the entity (world, room, sender) in Eliza properly
               const hyperfyWorldId = createUniqueUuid(this.runtime, 'hyperfy-world') as UUID
               const elizaRoomId = createUniqueUuid(this.runtime, this._currentWorldId || 'hyperfy-unknown-world')
               const entityId = createUniqueUuid(this.runtime, msg.fromId.toString()) as UUID
 
-              logger.debug(`[Hyperfy Chat] Creating world: ${hyperfyWorldId}`)
+              console.debug(`[Hyperfy Chat] Creating world: ${hyperfyWorldId}`)
               // Register the world if it doesn't exist
               await this.runtime.ensureWorldExists({
                 id: hyperfyWorldId,
@@ -926,7 +1161,7 @@ export class HyperfyService extends Service {
                 },
               })
 
-              logger.debug(`[Hyperfy Chat] Creating room: ${elizaRoomId}`)
+              console.debug(`[Hyperfy Chat] Creating room: ${elizaRoomId}`)
               // Register the room if it doesn't exist
               await this.runtime.ensureRoomExists({
                 id: elizaRoomId,
@@ -938,7 +1173,7 @@ export class HyperfyService extends Service {
                 worldId: hyperfyWorldId,
               })
 
-              logger.debug(`[Hyperfy Chat] Creating entity connection for: ${entityId}`)
+              console.debug(`[Hyperfy Chat] Creating entity connection for: ${entityId}`)
               // Ensure connection for the sender entity
               await this.runtime.ensureConnection({
                 entityId: entityId,
@@ -954,7 +1189,7 @@ export class HyperfyService extends Service {
 
               // Create the message memory
               const messageId = createUniqueUuid(this.runtime, msg.id.toString()) as UUID
-              logger.debug(`[Hyperfy Chat] Creating memory: ${messageId}`)
+              console.debug(`[Hyperfy Chat] Creating memory: ${messageId}`)
               const memory: Memory = {
                 id: messageId,
                 entityId: entityId,
@@ -976,22 +1211,11 @@ export class HyperfyService extends Service {
 
               // Create a callback function to handle responses
               const callback: HandlerCallback = async (responseContent: Content): Promise<Memory[]> => {
-                logger.info(`[Hyperfy Chat Callback] Received response: ${JSON.stringify(responseContent)}`)
+                console.info(`[Hyperfy Chat Callback] Received response: ${JSON.stringify(responseContent)}`)
                 if (responseContent.text) {
-                  logger.info(`[Hyperfy Chat Response] ${responseContent.text}`)
+                  console.info(`[Hyperfy Chat Response] ${responseContent.text}`)
                   // Send response back to Hyperfy
-                   if (this.world?.chat?.add) {
-                  this.world.chat.add(
-                    {
-                      body: responseContent.text,
-                      fromId: agentPlayerId,
-                      from: agentPlayerName,
-                    },
-                    true
-                        );
-                   } else {
-                        logger.error("[Hyperfy Chat Callback] Cannot send response: world.chat.add not available.");
-                }
+                  this.sendMessage(responseContent.text)
               }
                 return [];
               };
@@ -1000,7 +1224,7 @@ export class HyperfyService extends Service {
               try {
                 const entity = await this.runtime.getEntityById(entityId)
                 if (!entity) {
-                  logger.warn(
+                  console.warn(
                     `[Hyperfy Chat] Entity ${entityId} not found in database after creation, creating directly`
                   )
                   await this.runtime.createEntity({
@@ -1017,11 +1241,11 @@ export class HyperfyService extends Service {
                   })
                 }
               } catch (error) {
-                logger.error(`[Hyperfy Chat] Error checking/creating entity: ${error}`)
+                console.error(`[Hyperfy Chat] Error checking/creating entity: ${error}`)
               }
 
               // Emit the MESSAGE_RECEIVED event to trigger the message handler
-              logger.info(`[Hyperfy Chat] Emitting MESSAGE_RECEIVED event for message: ${messageId}`)
+              console.info(`[Hyperfy Chat] Emitting MESSAGE_RECEIVED event for message: ${messageId}`)
               await this.runtime.emitEvent(EventType.MESSAGE_RECEIVED, {
                 runtime: this.runtime,
                 message: memory,
@@ -1029,32 +1253,7 @@ export class HyperfyService extends Service {
                 source: 'hyperfy',
               })
 
-              logger.info(`[Hyperfy Chat] Successfully emitted event for message: ${messageId}`)
-            } catch (error) {
-              logger.error(`[Hyperfy Chat] Error processing message: ${error}`)
-              logger.error((error as Error).stack); // Log stack trace
-
-              // Always send a fallback response on error
-              const response = `I received your message but encountered an issue processing it.`
-              logger.info(`[Hyperfy Chat Fallback] Sending direct response after error: "${response}"`)
-
-              try {
-                   if (this.world?.chat?.add) {
-                this.world.chat.add(
-                  {
-                    body: response,
-                    fromId: agentPlayerId,
-                    from: agentPlayerName,
-                  },
-                  true
-                        );
-                   } else {
-                       logger.error("[Hyperfy Chat Fallback] Cannot send fallback: world.chat.add not available.");
-                   }
-              } catch (err) {
-                logger.error(`[Hyperfy Chat Fallback] Error sending error response: ${err}`)
-              }
-            }
+              console.info(`[Hyperfy Chat] Successfully emitted event for message: ${messageId}`)
           }
         })
       }
@@ -1072,7 +1271,7 @@ export class HyperfyService extends Service {
       if (!this.world || !this.isConnectedState) {
           // If disconnected or world gone, stop the loop
           if (this.tickIntervalId) {
-               logger.info('[Sim] Stopping tick loop (world/connection lost).');
+               console.info('[Sim] Stopping tick loop (world/connection lost).');
                clearTimeout(this.tickIntervalId);
                this.tickIntervalId = null;
           }
@@ -1089,12 +1288,12 @@ export class HyperfyService extends Service {
         // Check if it's the specific ReferenceError and log less frequently
         if (e instanceof ReferenceError && e.message?.includes('document is not defined')) {
           if (now - lastTickErrorLogTime > tickErrorLogInterval) {
-            logger.warn('[HyperfyService] Suppressed frequent ReferenceError during world.tick (document not defined)');
+            console.warn('[HyperfyService] Suppressed frequent ReferenceError during world.tick (document not defined)');
             lastTickErrorLogTime = now;
           }
         } else {
           // Log other errors normally
-          logger.error('[HyperfyService] Error during world.tick:', e);
+          console.error('[HyperfyService] Error during world.tick:', e);
         }
         // Don't stop the loop on error, just log and continue
       }
@@ -1109,7 +1308,7 @@ export class HyperfyService extends Service {
       }
     };
 
-    logger.info(`[HyperfyService] Starting simulation tick at ${HYPERFY_TICK_RATE}Hz.`);
+    console.info(`[HyperfyService] Starting simulation tick at ${HYPERFY_TICK_RATE}Hz.`);
     this.tickIntervalId = setTimeout(tickLoop, 0); // Start immediately
   }
 
@@ -1117,12 +1316,10 @@ export class HyperfyService extends Service {
     if (this.tickIntervalId) {
       clearTimeout(this.tickIntervalId);
       this.tickIntervalId = null; // Set to null immediately
-      logger.info('[Sim] Tick stopped.');
+      console.info('[Sim] Tick stopped.');
     }
   }
 
-  private startRandomMovement(): void { /* ... existing ... */ }
-  private stopRandomMovement(): void { /* ... existing ... */ }
   private startRandomChatting(): void { /* ... existing ... */ }
   private stopRandomChatting(): void { /* ... existing ... */ }
 }

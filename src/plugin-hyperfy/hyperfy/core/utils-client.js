@@ -43,9 +43,13 @@ export async function hashFile(file) {
     return hash;
   } 
   else {
-    // Unsupported type
-    console.error("hashFile: Unsupported input type", file);
-    throw new TypeError("Unsupported type passed to hashFile. Expected Node Buffer, Blob/File, ArrayBuffer, or TypedArray/DataView.");
+    if (file.buffer) {
+      const hashBuf = await crypto.subtle.digest('SHA-256', file.buffer);
+      const hash = Array.from(new Uint8Array(hashBuf))
+        .map(b => b.toString(16).padStart(2, '0'))
+        .join('');
+      return hash;
+    }
   }
 }
 

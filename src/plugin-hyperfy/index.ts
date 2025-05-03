@@ -15,7 +15,7 @@ import { hyperfyWalkRandomlyAction } from './actions/walk_randomly';
 import { hyperfyProvider } from './providers/world';
 
 // --- Hardcoded values matching agent/index.mjs ---
-const HYPERFY_WS_URL = process.env.WS_URL || 'ws://localhost:1337/ws'
+const HYPERFY_WS_URL = process.env.WS_URL || 'wss://chill.hyperfy.xyz/ws'
 // ---------------------------------------------
 
 

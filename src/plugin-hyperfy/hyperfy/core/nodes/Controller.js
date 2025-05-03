@@ -47,7 +47,7 @@ export class Controller extends Node {
       this.mesh.matrix.copy(this.matrix)
       this.mesh.matrixWorld.copy(this.matrixWorld)
       this.mesh.node = this
-      this.ctx.world.graphics.scene.add(this.mesh)
+      this.ctx.world.graphics?.scene.add(this.mesh)
     }
     const desc = new PHYSX.PxCapsuleControllerDesc()
     desc.height = this._height
@@ -119,7 +119,7 @@ export class Controller extends Node {
 
   unmount() {
     if (this.mesh) {
-      this.ctx.world.graphics.scene.remove(this.mesh)
+      this.ctx.world.graphics?.scene.remove(this.mesh)
     }
     this.actorHandle?.destroy()
     this.actorHandle = null

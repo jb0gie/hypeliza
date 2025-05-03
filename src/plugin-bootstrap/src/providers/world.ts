@@ -129,6 +129,32 @@ export const worldProvider: Provider = {
         `Other channels: ${channelsByType.other.length}`,
       ].join('\n');
 
+      // --- Get Interactable Actions --- >
+      let interactableActions: Array<{ id: string, label: string, distance: number }> = [];
+      let interactablesText = 'No interactable objects nearby.';
+      try {
+          const hyperfyService = runtime.getService<any>('hyperfy'); // Use 'any' if type import is problematic
+          if (hyperfyService && typeof hyperfyService.getInteractableActions === 'function') {
+              // Use a default distance or make it configurable?
+              interactableActions = hyperfyService.getInteractableActions(3);
+
+              if (interactableActions.length > 0) {
+                  interactablesText = 'Nearby Interactable Objects:\n' +
+                      interactableActions.map(action =>
+                          ` - "${action.label}" (ID: ${action.id.substring(0, 6)}...) at ${action.distance.toFixed(1)}m`
+                      ).join('\n');
+              }
+               logger.debug(`🌐 World provider: Found ${interactableActions.length} interactable actions.`);
+          } else {
+              logger.warn("🌐 World provider: Hyperfy service or getInteractableActions method not found.");
+              interactablesText = 'Could not check for interactable objects.';
+          }
+      } catch (err) {
+          logger.error(`🌐 World provider: Error getting interactable actions: ${err}`);
+          interactablesText = 'Error checking for interactable objects.';
+      }
+      // <-------------------------------
+
       // Build the world information object with formatted data
       const data = {
         world: {
@@ -154,16 +180,18 @@ export const worldProvider: Provider = {
             other: channelsByType.other.length,
           },
         },
+        interactables: interactableActions,
       };
 
       const values = {
         worldName: world.name,
         currentChannelName: currentRoom.name,
         worldInfo: worldInfoText,
+        interactablesInfo: interactablesText,
       };
 
       // Use addHeader like in entitiesProvider
-      const formattedText = addHeader('# World Information', worldInfoText);
+      const formattedText = addHeader('# World Information', worldInfoText) + '\n\n' + addHeader('# Nearby Objects', interactablesText);
 
       logger.debug('🌐 World provider completed successfully');
 

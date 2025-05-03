@@ -11,13 +11,14 @@ import { AgentControls } from '../controls'; // Import AgentControls type
 
 export const hyperfyStopMovingAction: Action = {
     name: 'HYPERFY_STOP_MOVING',
-    similes: ['STOP', 'HALT', 'STOP_WALKING', 'CANCEL_MOVEMENT'],
-    description: 'Stops any current navigation activity initiated by the GOTO action.',
+    similes: ['STOP', 'HALT', 'STOP_WALKING', 'CANCEL_MOVEMENT', 'STOP_PATROLLING'],
+    description: 'Stops any current navigation or patrol activity.',
     validate: async (runtime: IAgentRuntime): Promise<boolean> => {
       const service = runtime.getService<HyperfyService>(HyperfyService.serviceType);
       const controls = service?.getWorld()?.controls as AgentControls | undefined;
-      // Valid only if connected AND controls are available AND currently navigating
-      return !!service && service.isConnected() && !!controls && controls.getIsNavigating();
+      // Valid only if connected and controls are available
+      // Optional: Could check if getIsNavigating() or getIsPatrolling() is true
+      return !!service && service.isConnected() && !!controls;
     },
     handler: async (
       runtime: IAgentRuntime,
@@ -36,14 +37,21 @@ export const hyperfyStopMovingAction: Action = {
         return;
       }
 
+      // Check for required method
+      if (typeof controls.stopNavigation !== 'function') {
+           logger.error('AgentControls missing stopNavigation method.');
+           await callback({ text: "Error: Stop functionality not available in controls." });
+           return;
+      }
+
       const reason = options?.reason || "stop action called";
 
       try {
-        // Call the controls method to stop navigation
+        // Call the stop navigation method
         controls.stopNavigation(reason);
 
         await callback({
-           text: `Stopped current movement. Reason: ${reason}`,
+           text: `Stopped navigation. Reason: ${reason}`,
            actions: ['HYPERFY_STOP_MOVING'],
            source: 'hyperfy',
            metadata: { status: 'movement_stopped', reason: reason }

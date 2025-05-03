@@ -166,7 +166,6 @@ export class PlayerLocal extends Entity {
       .load('avatar', avatarUrl)
       .then(src => {
         if (this.avatar) this.avatar.deactivate()
-          console.log('src', src)
         if(src?.toNodes){
           this.avatar = src?.scene?.toNodes().get('avatar')
         } else {
@@ -979,21 +978,29 @@ export class PlayerLocal extends Entity {
   }
 
   chat(msg) {
-    this.nametag.active = false
     this.bubbleText.value = msg
-    this.bubble.active = true
+    //
+    // Check if running in an environment that supports graphics/DOM (like a browser)
+    if (typeof window !== 'undefined' && typeof document !== 'undefined') {
+      this.nametag.active = false
+      this.bubble.active = true
+    }
     clearTimeout(this.chatTimer)
     this.chatTimer = setTimeout(() => {
-      this.bubble.active = false
-      this.nametag.active = true
+      if (typeof window !== 'undefined' && typeof document !== 'undefined') {
+        this.bubble.active = false
+        this.nametag.active = true
+      }
     }, 5000)
   }
 
   modify(data) {
+    console.log('modify', data)
     let avatarChanged
     let changed
     if (data.hasOwnProperty('name')) {
       this.data.name = data.name
+      this.nametag.label = data.name
       changed = true
     }
     if (data.hasOwnProperty('health')) {
