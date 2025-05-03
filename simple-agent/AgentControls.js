@@ -1,4 +1,4 @@
-import { System } from '../project-hyperfy/src/hyperfy/core.js'
+import { System } from '../hyperfy/build/core.js'
 
 // Helper to create the button state object
 function createButtonState() {

@@ -37,7 +37,7 @@
   "scripts": {
     "start": "elizaos start",
     "dev": "elizaos dev",
-    "build": "tsup && cp src/hyperfy/* dist/",
+    "build": "tsup && cp src/plugin-hyperfy/hyperfy/core/physx-js-webidl.js src/plugin-hyperfy/hyperfy/core/physx-js-webidl.wasm dist/",
     "lint": "prettier --write ./src",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
