@@ -1,6 +1,7 @@
 import { System } from './hyperfy/core/systems/System.js'
 import { logger } from '@elizaos/core';
 import * as THREE from 'three';
+import { Vector3Enhanced } from './hyperfy/core/extras/Vector3Enhanced.js'
 
 // Define Navigation Constants
 const NAVIGATION_TICK_INTERVAL = 100; // ms
@@ -386,7 +387,7 @@ export class AgentControls extends System {
        const pos = player.base.position;
        const quat = player.base.quaternion;
 
-       if (!(pos instanceof THREE.Vector3)) {
+       if (!(pos instanceof THREE.Vector3 || pos instanceof Vector3Enhanced)) {
             logger.error(`[Controls ${caller}] Invalid state: player.base.position is not a THREE.Vector3.`);
             return false;
        }
