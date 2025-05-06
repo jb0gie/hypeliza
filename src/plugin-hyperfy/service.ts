@@ -23,6 +23,7 @@ import { geometryToPxMesh } from './hyperfy/core/extras/geometryToPxMesh.js'
 import { loadNodePhysX } from './hyperfy/core/loadNodePhysX.js'
 import { AgentControls } from './controls'
 import { AgentLoader } from './loader'
+import { Vector3Enhanced } from './hyperfy/core/extras/Vector3Enhanced.js'
 
 async function hashFileBuffer(buffer: Buffer): Promise<string> {
   const hashBuf = await crypto.subtle.digest('SHA-256', buffer)
@@ -618,7 +619,7 @@ export class HyperfyService extends Service {
       }
 
       const entity = this.world?.entities?.items?.get(entityId)
-       if (entity?.base?.position instanceof THREE.Vector3) {
+      if (entity?.base?.position instanceof THREE.Vector3 || entity?.base?.position instanceof Vector3Enhanced) {
             return entity.base.position
        } else if (entity?.data?.position) {
            const pos = entity.data.position
