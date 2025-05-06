@@ -62,8 +62,8 @@ export const hyperfyProvider: Provider = {
              count++;
         }
 
-        const entityText = count > 0
-            ? `Entities (${count} total, showing up to ${maxEntitiesToShow}):\n${entityLines.join('\n')}`
+        const entityText = entities?.size > 0
+            ? `Entities (${entities?.size} total, showing up to ${maxEntitiesToShow}):\n${entityLines.join('\n')}`
             : 'Entities: None found';
   
   
