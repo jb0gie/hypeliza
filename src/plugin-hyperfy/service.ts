@@ -619,7 +619,7 @@ export class HyperfyService extends Service {
       }
 
       const entity = this.world?.entities?.items?.get(entityId)
-      if (entity?.base?.position instanceof THREE.Vector3 || entity?.base?.position instanceof Vector3Enhanced) {
+       if (entity?.base?.position instanceof THREE.Vector3 || entity?.base?.position instanceof Vector3Enhanced) {
             return entity.base.position
        } else if (entity?.data?.position) {
            const pos = entity.data.position

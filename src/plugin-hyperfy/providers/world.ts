@@ -11,12 +11,9 @@ import { HyperfyService } from '../service';
 import * as THREE from 'three'
 import { Vector3Enhanced } from '../hyperfy/core/extras/Vector3Enhanced.js'
 
-
-
 export const hyperfyProvider: Provider = {
     name: 'HYPERFY_WORLD_STATE',
     description: 'Provides current entity positions/rotations and agent state in the connected Hyperfy world.',
-    // dynamic: true,
     get: async (runtime: IAgentRuntime, _message: Memory): Promise<ProviderResult> => {
       const service = runtime.getService<HyperfyService>(HyperfyService.serviceType);
   
@@ -56,7 +53,7 @@ export const hyperfyProvider: Provider = {
              
              let pos = 'N/A';
              if (position && (position instanceof THREE.Vector3 || position instanceof Vector3Enhanced)) {
-              pos = [position.x, position.y, position.z].map(p => p.toFixed(2)).join(', ');
+                pos = [position.x, position.y, position.z].map(p => p.toFixed(2)).join(', ');
              }
              // Include type in parenthesis if different from name
              const typeInfo = (type && type !== name) ? ` (${type})` : '';
