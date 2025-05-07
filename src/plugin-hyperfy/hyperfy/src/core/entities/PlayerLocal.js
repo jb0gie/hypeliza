@@ -42,8 +42,6 @@ export class PlayerLocal extends Entity {
   constructor(world, data, local) {
     super(world, data, local)
     this.isPlayer = true
-
-    console.log("this.data", this.data)
     this.init()
   }
 
@@ -96,8 +94,6 @@ export class PlayerLocal extends Entity {
     this.base.position.fromArray(this.data.position)
     this.base.quaternion.fromArray(this.data.quaternion)
 
-    console.log("this.base", this.base)
-
     this.aura = createNode('group')
 
     this.nametag = createNode('nametag', { label: '', health: this.data.health, active: false })
@@ -139,7 +135,6 @@ export class PlayerLocal extends Entity {
 
     this.cam = {}
     this.cam.position = new THREE.Vector3().copy(this.base.position)
-    console.log("this.cam", this.cam)
     this.cam.position.y += this.camHeight
     this.cam.quaternion = new THREE.Quaternion()
     this.cam.rotation = new THREE.Euler(0, 0, 0, 'YXZ')
