@@ -2,27 +2,6 @@ import { System } from './hyperfy/core/systems/System.js'
 import { logger } from '@elizaos/core';
 import * as THREE from 'three';
 import { Vector3Enhanced } from './hyperfy/core/extras/Vector3Enhanced.js'
-const UP = new THREE.Vector3(0, 1, 0)
-const DOWN = new THREE.Vector3(0, -1, 0)
-const FORWARD = new THREE.Vector3(0, 0, -1)
-const BACKWARD = new THREE.Vector3(0, 0, 1)
-const SCALE_IDENTITY = new THREE.Vector3(1, 1, 1)
-const POINTER_LOOK_SPEED = 0.1
-const PAN_LOOK_SPEED = 0.4
-const ZOOM_SPEED = 2
-const MIN_ZOOM = 2
-const MAX_ZOOM = 8
-const STICK_MAX_DISTANCE = 50
-const DEFAULT_CAM_HEIGHT = 1.2
-
-const v1 = new THREE.Vector3()
-const v2 = new THREE.Vector3()
-const v3 = new THREE.Vector3()
-const v4 = new THREE.Vector3()
-const v5 = new THREE.Vector3()
-const v6 = new THREE.Vector3()
-const e1 = new THREE.Euler(0, 0, 0, 'YXZ')
-const q1 = new THREE.Quaternion()
 // Define Navigation Constants
 const NAVIGATION_TICK_INTERVAL = 100; // ms
 const NAVIGATION_STOP_DISTANCE = 1.0; // meters
@@ -144,7 +123,6 @@ export class AgentControls extends System {
    * Starts navigating the agent towards the target X, Z coordinates.
    */
   public navigateTo(x: number, z: number): void {
-    
     logger.info(`[Controls Navigation] Request to navigate to (${x.toFixed(2)}, ${z.toFixed(2)})`);
     // --- Add check for player existence early ---
     if (!this.world?.entities?.player) {
@@ -161,16 +139,13 @@ export class AgentControls extends System {
     this._isNavigating = true;
     this._stopReason = null; // Clear stop reason
 
+    // Reset internal key tracker
     this._currentNavKeys = { forward: false, backward: false, left: false, right: false };
 
     // Start the navigation tick interval
     if (!this._navigationIntervalId) {
-
-      setTimeout(() => {
         this._navigationIntervalId = setInterval(() => this._navigationTick(), NAVIGATION_TICK_INTERVAL);
         logger.info("[Controls Navigation] Navigation tick interval started.");
-      }, 1000)
-        
     }
   }
 
