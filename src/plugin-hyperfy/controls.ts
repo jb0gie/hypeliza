@@ -2,6 +2,7 @@ import { System } from './hyperfy/core/systems/System.js'
 import { logger } from '@elizaos/core';
 import * as THREE from 'three';
 import { Vector3Enhanced } from './hyperfy/core/extras/Vector3Enhanced.js'
+
 // Define Navigation Constants
 const NAVIGATION_TICK_INTERVAL = 100; // ms
 const NAVIGATION_STOP_DISTANCE = 1.0; // meters
@@ -260,7 +261,6 @@ export class AgentControls extends System {
     this.setKey('keyD', false);
     this.setKey('shiftLeft', false);
   }
-
 
   // --- Random Walk Methods --- >
 
