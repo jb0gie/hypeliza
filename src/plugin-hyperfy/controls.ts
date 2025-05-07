@@ -224,8 +224,7 @@ export class AgentControls extends System {
 
     const player = this.world.entities.player;
     const playerPosition = new THREE.Vector3().copy(player.base.position);
-    const playerQuaternion = new THREE.Quaternion().copy(player.base.quaternion);
-
+    
     const distanceXZ = playerPosition.clone().setY(0).distanceTo(this._navigationTarget.clone().setY(0));
     if (distanceXZ <= NAVIGATION_STOP_DISTANCE) {
         logger.info(`[Controls Navigation Tick] Target reached (distance ${distanceXZ.toFixed(2)} <= ${NAVIGATION_STOP_DISTANCE}).`);
@@ -234,14 +233,6 @@ export class AgentControls extends System {
     }
 
     const directionWorld = this._navigationTarget.clone().sub(playerPosition).setY(0).normalize();
-    const forwardWorld = new THREE.Vector3(0, 0, -1).applyQuaternion(playerQuaternion).setY(0).normalize();
-
-    if (isNaN(forwardWorld.x) || forwardWorld.lengthSq() < 0.001 || isNaN(directionWorld.x) || directionWorld.lengthSq() < 0.001) {
-        logger.warn("[Controls Navigation Tick] Invalid forward or direction vector. Holding position.");
-        this.setKey('keyW', false);
-        this._currentNavKeys = { forward: false, backward: false, left: false, right: false };
-        return;
-    }
 
     // --- Rotate player toward target direction ---
     const desiredLook = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, -1), directionWorld);
