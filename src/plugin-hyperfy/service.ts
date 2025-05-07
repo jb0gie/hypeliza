@@ -17,13 +17,13 @@ import fs from 'fs/promises'
 import path from 'path'
 import { performance } from 'perf_hooks'
 import * as THREE from 'three'
-import { createClientWorld } from './hyperfy/core/createClientWorld.js'
-import { extendThreePhysX } from './hyperfy/core/extras/extendThreePhysX.js'
-import { geometryToPxMesh } from './hyperfy/core/extras/geometryToPxMesh.js'
-import { loadNodePhysX } from './hyperfy/core/loadNodePhysX.js'
+import { createClientWorld } from './hyperfy/src/core/createClientWorld.js'
+import { extendThreePhysX } from './hyperfy/src/core/extras/extendThreePhysX.js'
+import { geometryToPxMesh } from './hyperfy/src/core/extras/geometryToPxMesh.js'
+import { loadNodePhysX } from './hyperfy/src/core/loadNodePhysX.js'
 import { AgentControls } from './controls'
 import { AgentLoader } from './loader'
-import { Vector3Enhanced } from './hyperfy/core/extras/Vector3Enhanced.js'
+import { Vector3Enhanced } from './hyperfy/src/core/extras/Vector3Enhanced.js'
 
 async function hashFileBuffer(buffer: Buffer): Promise<string> {
   const hashBuf = await crypto.subtle.digest('SHA-256', buffer)

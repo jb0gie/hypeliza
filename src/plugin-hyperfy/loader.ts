@@ -1,8 +1,8 @@
 import * as THREE from 'three'
-import { System } from './hyperfy/core/systems/System.js'
-import { createVRMFactory } from './hyperfy/core/extras/createVRMFactory.js'
-import { createNode } from './hyperfy/core/extras/createNode.js'
-import { GLTFLoader } from "./hyperfy/core/libs/gltfloader/GLTFLoader.js";
+import { System } from './hyperfy/src/core/systems/System.js'
+import { createVRMFactory } from './hyperfy/src/core/extras/createVRMFactory.js'
+import { createNode } from './hyperfy/src/core/extras/createNode.js'
+import { GLTFLoader } from "./hyperfy/src/core/libs/gltfloader/GLTFLoader.js";
 // import { VRMLoaderPlugin } from "@pixiv/three-vrm";
 // --- Mock Browser Environment for Loaders ---
 // These might need adjustment based on GLTFLoader/VRMLoaderPlugin requirements
