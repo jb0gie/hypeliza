@@ -115,7 +115,9 @@ export class App extends Entity {
     this.root.quaternion.fromArray(this.data.quaternion)
     this.root.scale.fromArray(this.data.scale)
     // activate
-    this.root.activate({ world: this.world, entity: this, moving: !!this.data.mover })
+    if (this.root.activate) {
+      this.root.activate({ world: this.world, entity: this, moving: !!this.data.mover })
+    }
     // execute script
     const runScript =
       (this.mode === Modes.ACTIVE && script && !crashed) || (this.mode === Modes.MOVING && this.keepActive)
