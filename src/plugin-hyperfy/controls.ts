@@ -3,6 +3,11 @@ import { logger } from '@elizaos/core';
 import * as THREE from 'three';
 import { Vector3Enhanced } from './hyperfy/core/extras/Vector3Enhanced.js'
 
+const FORWARD = new THREE.Vector3(0, 0, -1)
+const v1 = new THREE.Vector3()
+const e1 = new THREE.Euler(0, 0, 0, 'YXZ')
+const q1 = new THREE.Quaternion()
+
 // Define Navigation Constants
 const NAVIGATION_TICK_INTERVAL = 100; // ms
 const NAVIGATION_STOP_DISTANCE = 1.0; // meters
@@ -223,7 +228,7 @@ export class AgentControls extends System {
     }
 
     const player = this.world.entities.player;
-    const playerPosition = new THREE.Vector3().copy(player.base.position);
+    const playerPosition = v1.copy(player.base.position);
     
     const distanceXZ = playerPosition.clone().setY(0).distanceTo(this._navigationTarget.clone().setY(0));
     if (distanceXZ <= NAVIGATION_STOP_DISTANCE) {
@@ -235,9 +240,9 @@ export class AgentControls extends System {
     const directionWorld = this._navigationTarget.clone().sub(playerPosition).setY(0).normalize();
 
     // --- Rotate player toward target direction ---
-    const desiredLook = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, -1), directionWorld);
+    const desiredLook = q1.setFromUnitVectors(FORWARD, directionWorld);
     player.base.quaternion = desiredLook; // Smoothly rotate toward target
-    const baseRotationY = new THREE.Euler().setFromQuaternion(player.base.quaternion, 'YXZ').y
+    const baseRotationY = e1.setFromQuaternion(player.base.quaternion, 'YXZ').y
     player.cam.rotation.y = baseRotationY;
     
     this._currentNavKeys = { forward: false, backward: false, left: false, right: false };
