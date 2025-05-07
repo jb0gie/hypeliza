@@ -21,6 +21,7 @@ import { createNodeClientWorld } from './hyperfy/src/core/createNodeClientWorld.
 import { AgentControls } from './controls'
 import { AgentLoader } from './loader'
 import { Vector3Enhanced } from './hyperfy/src/core/extras/Vector3Enhanced.js'
+import { loadPhysX } from './physx/loadPhysX.js'
 
 async function hashFileBuffer(buffer: Buffer): Promise<string> {
   const hashBuf = await crypto.subtle.digest('SHA-256', buffer)
@@ -193,6 +194,7 @@ export class HyperfyService extends Service {
         viewport: mockElement,
         ui: mockElement,
         initialAuthToken: config.authToken,
+        loadPhysX
       }
 
       if (typeof this.world.init !== 'function') {
