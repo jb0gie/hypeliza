@@ -17,7 +17,7 @@ import fs from 'fs/promises'
 import path from 'path'
 import { performance } from 'perf_hooks'
 import * as THREE from 'three'
-import { createClientWorld } from './hyperfy/src/core/createClientWorld.js'
+import { createNodeClientWorld } from './hyperfy/src/core/createNodeClientWorld.js'
 import { AgentControls } from './controls'
 import { AgentLoader } from './loader'
 import { Vector3Enhanced } from './hyperfy/src/core/extras/Vector3Enhanced.js'
@@ -164,7 +164,7 @@ export class HyperfyService extends Service {
     this.isPhysicsSetup = false
 
     try {
-      const world = createClientWorld()
+      const world = createNodeClientWorld()
       this.world = world
       ;(world as any).playerNamesMap = this.playerNamesMap
 
