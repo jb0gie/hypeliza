@@ -2,3 +2,7 @@
 	path = src/plugin-bootstrap/hyperfy
 	url = https://github.com/hyperfy-xyz/hyperfy.git
 	branch = node-client
+[submodule "src/plugin-hyperfy/hyperfy"]
+	path = src/plugin-hyperfy/hyperfy
+	url = https://github.com/hyperfy-xyz/hyperfy.git
+	branch = node-client
