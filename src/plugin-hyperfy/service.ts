@@ -313,12 +313,9 @@ export class HyperfyService extends Service {
         if (typeof this.world.network.upload === 'function') {
            console.info(`[Appearance] Calling world.network.upload for ${fullFileNameWithHash}...`);
             try {
-                const uploadPromise = this.world.network.upload({ 
-                    buffer: fileBuffer, 
-                    name: fileName, // Original filename might still be needed by upload func
-                    type: mimeType, 
-                    size: fileBuffer.length,
-                });
+                const fileForUpload = new File([fileBuffer], fileName, { type: mimeType });
+
+                const uploadPromise = this.world.network.upload(fileForUpload);
 
                 // Add a timeout for the upload operation (e.g., 30 seconds)
                 const UPLOAD_TIMEOUT_MS = 30000;
