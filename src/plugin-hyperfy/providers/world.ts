@@ -54,7 +54,7 @@ export const hyperfyProvider: Provider = {
              // Include type in parenthesis if different from name
              const typeInfo = (type && type !== name) ? ` (${type})` : '';
 
-             entityLines.push(`- ${id} (${name}${typeInfo}): Pos(${pos})`);
+             entityLines.push(`- Hyperfy Entity ID: ${id} (${name}${typeInfo}): Pos(${pos})`);
         }
 
         const entityText = entities?.size > 0
@@ -62,7 +62,7 @@ export const hyperfyProvider: Provider = {
             : 'Entities: None found';
   
   
-        const formattedText = `# Hyperfy World State\nStatus: ${state.status}\n${agentText}\n${entityText}`;
+        const formattedText = `\n\n# Hyperfy World State\nStatus: ${state.status}\n${agentText}\n${entityText} \n\n`;
   
         // Prepare data for values and raw data
         // Convert map to a more serializable object for the data field
