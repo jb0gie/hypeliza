@@ -151,10 +151,25 @@ export class AgentLoader extends System {
           let code = await response.text();
 
           // Remove UI creation block
-          code = code.replace(
-            /const \$ui = app\.create\([\s\S]*?app\.add\(\$ui\);?/,
-            ''
-          );
+          code = code
+            // Remove full blocks that create a `ui` and its children
+            .replace(/const\s+\$?ui\s*=.*?app\.create\([^)]*\{[\s\S]*?\}\);[\s\S]*?app\.add\(\$?ui\);?/gs, '')
+
+            // Remove loose standalone ui.create lines
+            .replace(/app\.create\(['"]ui['"][^;]*\);?/gs, '')
+
+            // Remove any remaining `ui.add(...)` blocks
+            .replace(/ui\.add\([^)]*\);?/gs, '')
+
+            // Remove other .add(ui) like app.add(timerUI)
+            .replace(/app\.add\([^)]*ui[^)]*\);?/gs, '')
+
+            // Remove variable declarations that would now be broken
+            .replace(/const\s+[a-zA-Z0-9_$]+\s*=\s*[,;]?/g, '')
+
+            // Remove remaining loose lines like ui.something = ...
+            .replace(/^\s*(\$?ui|timerUI)\.[^\n;]+[;]?\s*$/gm, '');
+
           const script = this.world.scripts.evaluate(code)
           this.results.set(key, script)
           return script
