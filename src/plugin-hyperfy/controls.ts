@@ -1,7 +1,7 @@
-import { System } from './hyperfy/core/systems/System.js'
+import { System } from './hyperfy/src/core/systems/System.js'
 import { logger } from '@elizaos/core';
 import * as THREE from 'three';
-import { Vector3Enhanced } from './hyperfy/core/extras/Vector3Enhanced.js'
+import { Vector3Enhanced } from './hyperfy/src/core/extras/Vector3Enhanced.js'
 
 const FORWARD = new THREE.Vector3(0, 0, -1)
 const v1 = new THREE.Vector3()
@@ -82,6 +82,8 @@ export class AgentControls extends System {
     commonKeys.forEach(key => {
       this[key] = createButtonState();
     });
+
+    this.camera = this.createCamera(this);
   }
 
   // Method for the agent script to set a key state
@@ -377,6 +379,32 @@ export class AgentControls extends System {
        logger.debug(`[Controls ${caller}] Player state validated successfully.`);
        // ---------------------
        return true;
+  }
+
+  createCamera(self) {
+    function bindRotations(quaternion, euler) {
+      euler._onChange(() => {
+        quaternion.setFromEuler(euler, false)
+      })
+      quaternion._onChange(() => {
+        euler.setFromQuaternion(quaternion, undefined, false)
+      })
+    }
+    const world = self.world;
+    const position = new THREE.Vector3().copy(world.rig?.position || new THREE.Vector3());
+    const quaternion = new THREE.Quaternion().copy(world.rig?.quaternion || new THREE.Quaternion());
+    const rotation = new THREE.Euler(0, 0, 0, 'YXZ').copy(world.rig?.rotation || new THREE.Euler());
+    bindRotations(quaternion, rotation); // You already import this
+    const zoom = world.camera?.position?.z ?? 10;
+  
+    return {
+      $camera: true,
+      position,
+      quaternion,
+      rotation,
+      zoom,
+      write: false,
+    };
   }
 
   // Dummy methods
