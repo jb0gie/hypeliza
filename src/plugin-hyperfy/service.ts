@@ -177,7 +177,31 @@ export class HyperfyService extends Service {
       // Temporarily comment out AgentLoader to test for updateTransform error
       const loader = new AgentLoader(world)
       ;(world as any).loader = loader
-      world.systems.push(loader)
+      world.systems.push(loader);
+
+      // HACK: Overwriting `chat.add` to prevent crashes caused by the original implementation.
+      // This ensures safe handling of chat messages and avoids unexpected errors from undefined fields.
+      (world as any).chat.add = (msg, broadcast) => {
+        const chat = (world as any).chat;
+        const MAX_MSGS = 50;
+        
+        chat.msgs = [...chat.msgs, msg]
+
+        if (chat.msgs.length > MAX_MSGS) {
+          chat.msgs.shift()
+        }
+        for (const callback of chat.listeners) {
+          callback(chat.msgs)
+        }
+
+        // emit chat event
+        const readOnly = Object.freeze({ ...msg })
+        this.world.events.emit('chat', readOnly)
+        // maybe broadcast
+        if (broadcast) {
+          this.world.network.send('chatAdded', msg)
+        }
+      };
 
       const mockElement = {
         appendChild: () => {},
@@ -972,7 +996,7 @@ export class HyperfyService extends Service {
       // Step 1: Identify new messages and update processed set
       msgs.forEach((msg: any) => {
         // Check timestamp FIRST - only consider messages newer than connection time
-        const messageTimestamp = msg.date ? msg.date * 1000 : 0; // msg.date is in seconds
+        const messageTimestamp = msg.createdAt ? new Date(msg.createdAt).getTime() : 0;
         if (!messageTimestamp || messageTimestamp <= this.connectionTime) {
             // console.debug(`[Chat Sub] Ignoring historical/old message ID ${msg?.id} (ts: ${messageTimestamp})`);
             // Ensure historical messages are marked processed if encountered *before* connectionTime was set (edge case)
