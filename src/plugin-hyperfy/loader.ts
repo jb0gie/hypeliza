@@ -147,6 +147,19 @@ export class AgentLoader extends System {
           return this.parseGLB(type, key, arrayBuffer, resolved);
         }
 
+        if (type === 'script') {
+          let code = await response.text();
+
+          // Remove UI creation block
+          code = code.replace(
+            /const \$ui = app\.create\([\s\S]*?app\.add\(\$ui\);?/,
+            ''
+          );
+          const script = this.world.scripts.evaluate(code)
+          this.results.set(key, script)
+          return script
+        }
+
         console.warn(`[AgentLoader] Unsupported type in load(): ${type}`);
         return null;
       })
