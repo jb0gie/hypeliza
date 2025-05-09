@@ -17,13 +17,11 @@ import fs from 'fs/promises'
 import path from 'path'
 import { performance } from 'perf_hooks'
 import * as THREE from 'three'
-import { createClientWorld } from './hyperfy/core/createClientWorld.js'
-import { extendThreePhysX } from './hyperfy/core/extras/extendThreePhysX.js'
-import { geometryToPxMesh } from './hyperfy/core/extras/geometryToPxMesh.js'
-import { loadNodePhysX } from './hyperfy/core/loadNodePhysX.js'
+import { createNodeClientWorld } from './hyperfy/src/core/createNodeClientWorld.js'
 import { AgentControls } from './controls'
 import { AgentLoader } from './loader'
-import { Vector3Enhanced } from './hyperfy/core/extras/Vector3Enhanced.js'
+import { Vector3Enhanced } from './hyperfy/src/core/extras/Vector3Enhanced.js'
+import { loadPhysX } from './physx/loadPhysX.js'
 
 async function hashFileBuffer(buffer: Buffer): Promise<string> {
   const hashBuf = await crypto.subtle.digest('SHA-256', buffer)
@@ -167,15 +165,7 @@ export class HyperfyService extends Service {
     this.isPhysicsSetup = false
 
     try {
-      console.info("[Hyperfy Connect] Loading PhysX...")
-      this.PHYSX = await loadNodePhysX()
-      if (!this.PHYSX) {
-        throw new Error("Failed to load PhysX.")
-      }
-      ;(globalThis as any).PHYSX = this.PHYSX
-      console.info("[Hyperfy Connect] PhysX loaded. Extending THREE...")
-
-      const world = createClientWorld()
+      const world = createNodeClientWorld()
       this.world = world
       ;(world as any).playerNamesMap = this.playerNamesMap
 
@@ -204,6 +194,7 @@ export class HyperfyService extends Service {
         viewport: mockElement,
         ui: mockElement,
         initialAuthToken: config.authToken,
+        loadPhysX
       }
 
       if (typeof this.world.init !== 'function') {
@@ -244,11 +235,6 @@ export class HyperfyService extends Service {
         })
         console.info(`Populated ${this.processedMsgIds.size} processed message IDs from history.`)
       }
-
-      // ---> Moved Physics Setup Here <--- 
-      // Wait for world systems and potentially initial snapshot data before setting up physics
-      await this.setupStaticPhysicsFromEnvironment()
-      // ----------------------------------
 
       this.subscribeToHyperfyEvents()
 
@@ -291,131 +277,6 @@ export class HyperfyService extends Service {
       this.startChatSubscription()
     } else {
         console.warn('[Hyperfy Events] world.chat.subscribe not available.')
-    }
-  }
-
-  private async setupStaticPhysicsFromEnvironment(): Promise<void> {
-    if (this.isPhysicsSetup) {
-        console.info("[Physics Setup] Skipping: Already setup.")
-        return
-    }
-     if (!this.world || !this.PHYSX) {
-        console.warn("[Physics Setup] Skipping: World or PhysX not ready.")
-        return
-    }
-    console.info("[Physics Setup] Setting up static environment geometry...")
-
-    const physicsSystem = this.world.physics
-    if (!physicsSystem || !physicsSystem.physics || !physicsSystem.scene || !physicsSystem.material) {
-        console.error("[Physics Setup] Physics system components (physics, scene, material) not ready in world instance.")
-        return
-    }
-     const physics = physicsSystem.physics
-     const scene = physicsSystem.scene
-     const material = physicsSystem.material
-
-    const envModelUrl = this.world.settings?.model?.url
-    if (!envModelUrl) {
-        console.warn("[Physics Setup] No environment model URL found in world settings.")
-        this.isPhysicsSetup = true
-        return
-    }
-
-    try {
-        console.info(`[Physics Setup] Loading environment model: ${envModelUrl}`)
-        if (!this.world.loader || typeof this.world.loader.load !== 'function') {
-            throw new Error("world.loader.load is not available.")
-        }
-        const envGltf = await this.world.loader.load('model', envModelUrl)
-        console.info(`[Physics Setup] Environment model loaded successfully.`)
-
-        if (!envGltf || !envGltf.scene) {
-            throw new Error("Loaded GLTF is invalid or has no scene.")
-        }
-
-        console.info("[Physics Setup] PhysX components obtained from world instance.")
-
-        const physxTransform = new this.PHYSX.PxTransform(this.PHYSX.PxIdentityEnum.PxIdentity)
-        let meshesProcessed = 0
-        let actorsAdded = 0
-        const traversalErrors: Error[] = []
-
-        envGltf.scene.updateMatrixWorld(true)
-
-        envGltf.scene.traverseVisible((node: any) => {
-            if (node instanceof THREE.Mesh && node.geometry) {
-                console.debug(`[Physics Setup] Processing mesh: ${node.name || '(unnamed)'}`)
-                meshesProcessed++
-                let pmeshHandle: any = null
-                try {
-                    if (typeof geometryToPxMesh !== 'function') {
-                        throw new Error("geometryToPxMesh function is not available.")
-                    }
-                    pmeshHandle = geometryToPxMesh(this.world, node.geometry, false)
-
-                    if (!pmeshHandle || !pmeshHandle.value) {
-                        throw new Error(`geometryToPxMesh returned null/invalid for mesh ${node.name || '(unnamed)'}`)
-                    }
-                    const cookedMesh = pmeshHandle.value
-
-                    const worldScale = new THREE.Vector3()
-                    const worldQuat = new THREE.Quaternion()
-                    node.getWorldScale(worldScale)
-                    node.getWorldQuaternion(worldQuat)
-
-                    if (typeof (worldScale as any).toPxVec3 !== 'function' || typeof (worldQuat as any).toPxQuat !== 'function') {
-                         throw new Error("THREE.Vector3.toPxVec3 or THREE.Quaternion.toPxQuat not available. extendThreePhysX likely failed or wasn't called correctly.")
-                     }
-                    const meshScalePx = (worldScale as any).toPxVec3()
-                    const meshQuatPx = (worldQuat as any).toPxQuat()
-
-                    const meshScale = new this.PHYSX.PxMeshScale(meshScalePx, { x: 0, y: 0, z: 0, w: 1 })
-
-                    const meshGeometry = new this.PHYSX.PxTriangleMeshGeometry(cookedMesh, meshScale, new this.PHYSX.PxMeshGeometryFlags(0))
-                    if (!meshGeometry.isValid()) {
-                        pmeshHandle?.release?.()
-                        throw new Error("Created PxTriangleMeshGeometry is invalid")
-                    }
-
-                    const shapeFlags = new this.PHYSX.PxShapeFlags(
-                        this.PHYSX.PxShapeFlagEnum.eSCENE_QUERY_SHAPE | this.PHYSX.PxShapeFlagEnum.eSIMULATION_SHAPE
-                    )
-                    const shape = physics.createShape(meshGeometry, material, true, shapeFlags)
-
-                    const filterData = new this.PHYSX.PxFilterData(1, 1 << 0, 0, 0)
-                    shape.setSimulationFilterData(filterData)
-                    shape.setQueryFilterData(filterData)
-
-                    if (typeof (node.matrixWorld as any).toPxTransform !== 'function') {
-                         throw new Error("THREE.Matrix4.toPxTransform not available. extendThreePhysX likely failed or wasn't called correctly.")
-                    }
-                    (node.matrixWorld as any).toPxTransform(physxTransform)
-                    const staticActor = physics.createRigidStatic(physxTransform)
-
-                    staticActor.attachShape(shape)
-                    scene.addActor(staticActor)
-                    actorsAdded++
-                    console.debug(`[Physics Setup] Added static actor for ${node.name || '(unnamed)'}.`)
-
-                } catch (error: any) {
-                    console.error(`[Physics Setup] Error processing mesh ${node.name || '(unnamed)'}:`, error)
-                    traversalErrors.push(error)
-                } finally {
-                    pmeshHandle?.release?.()
-                }
-            }
-        })
-
-        if (traversalErrors.length > 0) {
-            console.warn(`[Physics Setup] Finished. Meshes processed: ${meshesProcessed}, Actors added: ${actorsAdded}, Errors: ${traversalErrors.length}.`)
-        } else {
-            console.info(`[Physics Setup] Finished successfully. Meshes processed: ${meshesProcessed}, Actors added: ${actorsAdded}.`)
-        }
-        this.isPhysicsSetup = true
-
-    } catch (error: any) {
-        console.error(`[Physics Setup] Failed to load or process environment model ${envModelUrl}:`, error)
-        this.isPhysicsSetup = true
     }
   }
 

@@ -9,7 +9,7 @@ import {
 } from '@elizaos/core';
 import { HyperfyService } from '../service';
 import * as THREE from 'three'
-import { Vector3Enhanced } from '../hyperfy/core/extras/Vector3Enhanced.js'
+import { Vector3Enhanced } from '../hyperfy/src/core/extras/Vector3Enhanced.js'
 
 export const hyperfyProvider: Provider = {
     name: 'HYPERFY_WORLD_STATE',
