@@ -43,8 +43,6 @@ export const hyperfyProvider: Provider = {
         const entities = world?.entities?.items;
         // Iterate over the entities Map from the service state
         for (const [id, entity] of entities.entries()) {
-            //  if (count >= maxEntitiesToShow) continue;
-
              const position = entity?.base?.position;
              const name = entity?.data?.name;
              const type = entity?.data?.type;
