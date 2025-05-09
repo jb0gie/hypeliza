@@ -39,13 +39,11 @@ export const hyperfyProvider: Provider = {
   
         // Format entities from the map
         const entityLines: string[] = [];
-        const maxEntitiesToShow = 10;
-        let count = 0;
         const world = service?.getWorld();
         const entities = world?.entities?.items;
         // Iterate over the entities Map from the service state
         for (const [id, entity] of entities.entries()) {
-             if (count >= maxEntitiesToShow) continue;
+            //  if (count >= maxEntitiesToShow) continue;
 
              const position = entity?.base?.position;
              const name = entity?.data?.name;
@@ -59,11 +57,10 @@ export const hyperfyProvider: Provider = {
              const typeInfo = (type && type !== name) ? ` (${type})` : '';
 
              entityLines.push(`- ${id} (${name}${typeInfo}): Pos(${pos})`);
-             count++;
         }
 
         const entityText = entities?.size > 0
-            ? `Entities (${entities?.size} total, showing up to ${maxEntitiesToShow}):\n${entityLines.join('\n')}`
+            ? `Entities (${entities?.size} total):\n${entityLines.join('\n')}`
             : 'Entities: None found';
   
   
