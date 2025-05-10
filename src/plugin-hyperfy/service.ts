@@ -22,6 +22,8 @@ import { AgentControls } from './controls'
 import { AgentLoader } from './loader'
 import { Vector3Enhanced } from './hyperfy/src/core/extras/Vector3Enhanced.js'
 import { loadPhysX } from './physx/loadPhysX.js'
+import { BehaviorManager } from "./behaviormanager";
+import { EMOTES_LIST } from './constants.js'
 
 async function hashFileBuffer(buffer: Buffer): Promise<string> {
   const hashBuf = await crypto.subtle.digest('SHA-256', buffer)
@@ -66,6 +68,8 @@ export class HyperfyService extends Service {
   private PHYSX: any = null
   private isPhysicsSetup: boolean = false
   private connectionTime: number | null = null
+  private emoteHashMap: Map<string, string> = new Map();
+  private behaviorManager: BehaviorManager;
 
   public get currentWorldId(): UUID | null {
     return this._currentWorldId
@@ -269,6 +273,9 @@ export class HyperfyService extends Service {
 
       this.startAppearancePolling()
 
+      this.behaviorManager = new BehaviorManager(this.runtime);
+      this.behaviorManager.start();
+
       this.connectionTime = Date.now(); // Record connection time
 
       console.info(`HyperfyService connected successfully to ${this.wsUrl}`)
@@ -304,102 +311,186 @@ export class HyperfyService extends Service {
     }
   }
 
-  private async uploadAndSetAvatar(): Promise<{ success: boolean, error?: string }> {
-    if (!this.world || !this.world.entities?.player || !this.world.network || !this.world.assetsUrl) {
-        console.warn("[Appearance] Cannot set avatar: World, player, network, or assetsUrl not ready.");
-        return { success: false, error: "Prerequisites not met" };
+  /**
+   * Uploads the character's avatar model and associated emote animations,
+   * sets the avatar URL locally, updates emote hash mappings,
+   * and notifies the server of the new avatar.
+   * 
+   * This function handles all assets required for character expression and animation.
+   */
+  private async uploadCharacterAssets(): Promise<{
+    success: boolean;
+    error?: string;
+  }> {
+    if (
+      !this.world ||
+      !this.world.entities?.player ||
+      !this.world.network ||
+      !this.world.assetsUrl
+    ) {
+      console.warn(
+        "[Appearance] Cannot set avatar: World, player, network, or assetsUrl not ready."
+      );
+      return { success: false, error: "Prerequisites not met" };
     }
 
-    const agentPlayer = this.world.entities.player
-    let fileName = ''
-    const localAvatarPath = path.resolve(LOCAL_AVATAR_PATH)
+    const agentPlayer = this.world.entities.player;
+    const localAvatarPath = path.resolve(LOCAL_AVATAR_PATH);
+    let fileName = "";
 
     try {
-        console.info(`[Appearance] Reading avatar file from: ${localAvatarPath}`)
-        const fileBuffer: Buffer = await fs.readFile(localAvatarPath)
-        fileName = path.basename(localAvatarPath)
-        const mimeType = fileName.endsWith('.vrm') ? 'model/gltf-binary' : 'application/octet-stream'
+      console.info(`[Appearance] Reading avatar file from: ${localAvatarPath}`);
+      const fileBuffer: Buffer = await fs.readFile(localAvatarPath);
+      fileName = path.basename(localAvatarPath);
+      const mimeType = fileName.endsWith(".vrm")
+        ? "model/gltf-binary"
+        : "application/octet-stream";
 
-        console.info(`[Appearance] Uploading ${fileName} (${(fileBuffer.length / 1024).toFixed(2)} KB, Type: ${mimeType})...`)
+      console.info(
+        `[Appearance] Uploading ${fileName} (${(fileBuffer.length / 1024).toFixed(2)} KB, Type: ${mimeType})...`
+      );
 
-        if (!crypto.subtle || typeof crypto.subtle.digest !== 'function') {
-            throw new Error("crypto.subtle.digest is not available. Ensure Node.js version supports Web Crypto API.");
+      if (!crypto.subtle || typeof crypto.subtle.digest !== "function") {
+        throw new Error(
+          "crypto.subtle.digest is not available. Ensure Node.js version supports Web Crypto API."
+        );
+      }
+
+      const hash = await hashFileBuffer(fileBuffer);
+      const ext = fileName.split(".").pop()?.toLowerCase() || "vrm";
+      const fullFileNameWithHash = `${hash}.${ext}`;
+      const baseUrl = this.world.assetsUrl.replace(/\/$/, "");
+      const constructedHttpUrl = `${baseUrl}/${fullFileNameWithHash}`;
+
+      if (typeof this.world.network.upload !== "function") {
+        console.warn(
+          "[Appearance] world.network.upload function not found. Cannot upload."
+        );
+        return { success: false, error: "Upload function unavailable" };
+      }
+
+      try {
+        console.info(
+          `[Appearance] Uploading avatar to ${constructedHttpUrl}...`
+        );
+        const fileForUpload = new File([fileBuffer], fileName, {
+          type: mimeType,
+        });
+
+        const uploadPromise = this.world.network.upload(fileForUpload);
+        const timeoutPromise = new Promise((_resolve, reject) =>
+          setTimeout(() => reject(new Error("Upload timed out")), 30000)
+        );
+
+        await Promise.race([uploadPromise, timeoutPromise]);
+        console.info(`[Appearance] Avatar uploaded successfully.`);
+      } catch (uploadError: any) {
+        console.error(
+          `[Appearance] Avatar upload failed: ${uploadError.message}`,
+          uploadError.stack
+        );
+        return {
+          success: false,
+          error: `Upload failed: ${uploadError.message}`,
+        };
+      }
+
+      // Apply avatar locally
+      if (agentPlayer && typeof agentPlayer.setSessionAvatar === "function") {
+        agentPlayer.setSessionAvatar(constructedHttpUrl);
+      } else {
+        console.warn(
+          "[Appearance] agentPlayer.setSessionAvatar not available."
+        );
+      }
+
+      // Upload emotes
+      for (const emote of EMOTES_LIST) {
+        try {
+          const emoteBuffer = await fs.readFile(path.resolve(emote.path));
+          const emoteMimeType = "model/gltf-binary";
+
+          const emoteHash = await hashFileBuffer(emoteBuffer);
+          const emoteExt = emote.path.split(".").pop()?.toLowerCase() || "glb";
+          const emoteFullName = `${emoteHash}.${emoteExt}`;
+          const emoteUrl = `asset://${emoteFullName}`;
+
+          console.info(
+            `[Appearance] Uploading emote '${emote.name}' as ${emoteFullName} (${(emoteBuffer.length / 1024).toFixed(2)} KB)`
+          );
+
+          const emoteFile = new File([emoteBuffer], path.basename(emote.path), {
+            type: emoteMimeType,
+          });
+
+          const emoteUploadPromise = this.world.network.upload(emoteFile);
+          const emoteTimeout = new Promise((_resolve, reject) =>
+            setTimeout(() => reject(new Error("Upload timed out")), 30000)
+          );
+
+          await Promise.race([emoteUploadPromise, emoteTimeout]);
+
+          this.emoteHashMap.set(emote.name, emoteFullName);
+          console.info(
+            `[Appearance] Emote '${emote.name}' uploaded: ${emoteUrl}`
+          );
+        } catch (err: any) {
+          console.error(
+            `[Appearance] Failed to upload emote '${emote.name}': ${err.message}`,
+            err.stack
+          );
         }
-        const hash = await hashFileBuffer(fileBuffer);
-        const ext = fileName.split('.').pop()?.toLowerCase() || 'vrm';
-        const fullFileNameWithHash = `${hash}.${ext}`;
-        const baseUrl = this.world.assetsUrl.replace(/\/$/, '');
-        const constructedHttpUrl = `${baseUrl}/${fullFileNameWithHash}`;
-        console.info(`[Appearance] Constructed HTTP(S) URL: ${constructedHttpUrl}`)
+      }
 
-        // --- Perform Upload and Server Update --- >
-        let uploadSuccessful = false;
-        if (typeof this.world.network.upload === 'function') {
-           console.info(`[Appearance] Calling world.network.upload for ${fullFileNameWithHash}...`);
-            try {
-                const fileForUpload = new File([fileBuffer], fileName, { type: mimeType });
+      // Notify server
+      if (typeof this.world.network.send === "function") {
+        this.world.network.send("playerSessionAvatar", {
+          avatar: constructedHttpUrl,
+        });
+        console.info(
+          `[Appearance] Sent playerSessionAvatar with: ${constructedHttpUrl}`
+        );
+      } else {
+        console.error(
+          "[Appearance] Upload succeeded but world.network.send is not available."
+        );
+      }
 
-                const uploadPromise = this.world.network.upload(fileForUpload);
-
-                // Add a timeout for the upload operation (e.g., 30 seconds)
-                const UPLOAD_TIMEOUT_MS = 30000;
-                const timeoutPromise = new Promise((_resolve, reject) => 
-                    setTimeout(() => reject(new Error('Upload timed out')), UPLOAD_TIMEOUT_MS)
-                );
-
-                // Assume upload returns a promise that resolves on success
-                await Promise.race([uploadPromise, timeoutPromise]);
-
-                // --- Add logging immediately after await --- >
-                console.info(`[Appearance] Awaited world.network.upload successfully finished for ${fullFileNameWithHash}.`);
-                // <-------------------------------------------
-
-                console.info(`[Appearance] world.network.upload completed for ${fullFileNameWithHash}.`);
-                uploadSuccessful = true;
-             } catch (uploadError: any) {
-                console.error(`[Appearance] world.network.upload failed: ${uploadError.message}`, uploadError.stack);
-                // Don't throw here, let the function return failure status
-                return { success: false, error: `Upload failed: ${uploadError.message}` };
-           }
-        } else {
-           console.warn("[Appearance] world.network.upload function not found. Cannot upload.");
-            return { success: false, error: "Upload function unavailable" }; // Cannot proceed without upload
-        }
-
-        // --- Apply change locally *AFTER* successful upload --- >
-        if (uploadSuccessful && agentPlayer && typeof agentPlayer.setSessionAvatar === 'function') {
-             console.info(`[Appearance] Applying session avatar locally (post-upload): ${constructedHttpUrl}`);
-             agentPlayer.setSessionAvatar(constructedHttpUrl);
-        } else if (uploadSuccessful) {
-             // Still log warning if function is missing, even post-upload
-             console.warn("[Appearance] agentPlayer.setSessionAvatar not available for local application (post-upload).");
-        } else {
-            // If upload failed, we don't apply locally
-             logger.debug("[Appearance] Skipping local avatar application due to upload failure.")
-        }
-        // <---------------------------------------------------
-
-        // Only send network message if upload was successful
-        if (uploadSuccessful && this.world.network && typeof this.world.network.send === 'function') {
-            this.world.network.send('playerSessionAvatar', { avatar: constructedHttpUrl });
-            console.info(`[Appearance] Sent playerSessionAvatar network message with: ${constructedHttpUrl}`);
-            return { success: true }; // Indicate overall success
-        } else if (!uploadSuccessful) {
-            // This case is handled by the return inside the upload try-catch
-            return { success: false, error: "Upload did not succeed (state unknown)" }; 
-        } else {
-             console.error("[Appearance] Upload succeeded but world.network.send is not available.");
-             return { success: false, error: "Network send unavailable after upload" };
-        }
-
+      return { success: true };
     } catch (error: any) {
-        if (error.code === 'ENOENT') {
-            console.error(`[Appearance] Error: Avatar file not found at ${localAvatarPath}. CWD: ${process.cwd()}`)
-        } else {
-            console.error("[Appearance] Unexpected error during avatar process:", error.message, error.stack)
-        }
-        return { success: false, error: error.message };
+      if (error.code === "ENOENT") {
+        console.error(
+          `[Appearance] Avatar file not found at ${localAvatarPath}. CWD: ${process.cwd()}`
+        );
+      } else {
+        console.error(
+          "[Appearance] Unexpected error during avatar process:",
+          error.message,
+          error.stack
+        );
+      }
+      return { success: false, error: error.message };
     }
+  }
+
+  playEmote(name: string) {
+    const hashName = this.emoteHashMap.get(name);
+    if (!hashName) {
+      console.warn(`[Emote] Emote '${name}' not found.`);
+      return;
+    }
+
+    const agentPlayer = this.world?.entities?.player;
+    if (!agentPlayer) {
+      console.warn("[Emote] Player entity not found.");
+      return;
+    }
+
+    const emoteUrl = `asset://${hashName}`;
+    agentPlayer.data.effect = agentPlayer.data.effect || {};
+    agentPlayer.data.effect.emote = emoteUrl;
+
+    console.info(`[Emote] Playing '${name}' → ${emoteUrl}`);
   }
 
   private startAppearancePolling(): void {
@@ -451,7 +542,7 @@ export class HyperfyService extends Service {
              // --- Set Avatar (if not already done AND assets URL ready) ---
              if (!pollingTasks.avatar && assetsUrlReady) {
                  console.info(`[Appearance Polling] Player (ID: ${agentPlayerId}), network, assetsUrl ready. Attempting avatar upload and set...`);
-                 const result = await this.uploadAndSetAvatar();
+                 const result = await this.uploadCharacterAssets();
 
                  if (result.success) {
                      this.appearanceSet = true; // Update global state
