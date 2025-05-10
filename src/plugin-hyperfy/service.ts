@@ -24,16 +24,10 @@ import { AgentControls } from './controls'
 import { AgentLoader } from './loader'
 import { Vector3Enhanced } from './hyperfy/src/core/extras/Vector3Enhanced.js'
 import { loadPhysX } from './physx/loadPhysX.js'
-import { BehaviorManager } from "./behaviormanager";
+import { BehaviorManager } from "./behavior-manager.js"
+import { EmoteManager } from './emote-manager.js'
 import { EMOTES_LIST } from './constants.js'
-
-async function hashFileBuffer(buffer: Buffer): Promise<string> {
-  const hashBuf = await crypto.subtle.digest('SHA-256', buffer)
-  const hash = Array.from(new Uint8Array(hashBuf))
-    .map(b => b.toString(16).padStart(2, '0'))
-    .join('')
-  return hash
-}
+import { hashFileBuffer } from './utils'
 
 const LOCAL_AVATAR_PATH = process.env.HYPERFY_AGENT_AVATAR_PATH || './avatar.vrm'
 
@@ -73,6 +67,7 @@ export class HyperfyService extends Service {
   private emoteHashMap: Map<string, string> = new Map();
   private currentEmoteTimeout: NodeJS.Timeout | null = null;
   private behaviorManager: BehaviorManager;
+  private emoteManager: EmoteManager;
 
   public get currentWorldId(): UUID | null {
     return this._currentWorldId
@@ -271,13 +266,15 @@ export class HyperfyService extends Service {
 
       this.isConnectedState = true
 
+      this.behaviorManager = new BehaviorManager(this.runtime);
+      this.behaviorManager.start();
+      
+      this.emoteManager = new EmoteManager(world);
+      
       this.startSimulation()
       this.startEntityUpdates()
 
       this.startAppearancePolling()
-
-      this.behaviorManager = new BehaviorManager(this.runtime);
-      this.behaviorManager.start();
 
       this.connectionTime = Date.now(); // Record connection time
 
@@ -408,42 +405,7 @@ export class HyperfyService extends Service {
       }
 
       // Upload emotes
-      for (const emote of EMOTES_LIST) {
-        try {
-          const emoteBuffer = await fs.readFile(path.resolve(emote.path));
-          const emoteMimeType = "model/gltf-binary";
-
-          const emoteHash = await hashFileBuffer(emoteBuffer);
-          const emoteExt = emote.path.split(".").pop()?.toLowerCase() || "glb";
-          const emoteFullName = `${emoteHash}.${emoteExt}`;
-          const emoteUrl = `asset://${emoteFullName}`;
-
-          console.info(
-            `[Appearance] Uploading emote '${emote.name}' as ${emoteFullName} (${(emoteBuffer.length / 1024).toFixed(2)} KB)`
-          );
-
-          const emoteFile = new File([emoteBuffer], path.basename(emote.path), {
-            type: emoteMimeType,
-          });
-
-          const emoteUploadPromise = this.world.network.upload(emoteFile);
-          const emoteTimeout = new Promise((_resolve, reject) =>
-            setTimeout(() => reject(new Error("Upload timed out")), 30000)
-          );
-
-          await Promise.race([emoteUploadPromise, emoteTimeout]);
-
-          this.emoteHashMap.set(emote.name, emoteFullName);
-          console.info(
-            `[Appearance] Emote '${emote.name}' uploaded: ${emoteUrl}`
-          );
-        } catch (err: any) {
-          console.error(
-            `[Appearance] Failed to upload emote '${emote.name}': ${err.message}`,
-            err.stack
-          );
-        }
-      }
+      await this.emoteManager.uploadEmotes();
 
       // Notify server
       if (typeof this.world.network.send === "function") {
@@ -473,48 +435,6 @@ export class HyperfyService extends Service {
         );
       }
       return { success: false, error: error.message };
-    }
-  }
-
-  playEmote(name: string) {
-    const hashName = this.emoteHashMap.get(name);
-    if (!hashName) {
-      console.warn(`[Emote] Emote '${name}' not found.`);
-      return;
-    }
-
-    const agentPlayer = this.world?.entities?.player;
-    if (!agentPlayer) {
-      console.warn("[Emote] Player entity not found.");
-      return;
-    }
-
-    const emoteUrl = `asset://${hashName}`;
-    agentPlayer.data.effect = agentPlayer.data.effect || {};
-    agentPlayer.data.effect.emote = emoteUrl;
-
-    console.info(`[Emote] Playing '${name}' → ${emoteUrl}`);
-
-    // Clear any existing emote timeout
-    if (this.currentEmoteTimeout) {
-      clearTimeout(this.currentEmoteTimeout);
-      this.currentEmoteTimeout = null;
-    }
-
-    // Get duration from EMOTES_LIST
-    const emoteMeta = EMOTES_LIST.find(e => e.name === name);
-    const duration = emoteMeta?.duration || 1;
-
-    if (duration) {
-      this.currentEmoteTimeout = setTimeout(() => {
-        if (agentPlayer.data?.effect?.emote === emoteUrl) {
-          agentPlayer.data.effect.emote = null;
-          console.info(`[Emote] Emote '${name}' cleared after ${duration}s`);
-        }
-        this.currentEmoteTimeout = null;
-      }, duration * 1000);
-    } else {
-      console.warn(`[Emote] No duration found for '${name}', emote will stay active.`);
     }
   }
 
@@ -808,30 +728,6 @@ export class HyperfyService extends Service {
     } catch (error: any) {
       console.error('Error setting key:', error.message, error.stack)
       throw error
-    }
-  }
-
-  /**
-   * Attempts to play an emote using its URL.
-   */
-  async emote(emoteUrl: string): Promise<void> {
-    if (!this.isConnected() || !this.world?.entities?.player) {
-      throw new Error('HyperfyService: Cannot play emote. Player not ready.');
-    }
-    const player = this.world.entities.player;
-
-    // PlayerLocal has a playEmote method
-    if (typeof player.playEmote === 'function') {
-       console.info(`[Action] Attempting to play emote: ${emoteUrl}`);
-       try {
-            player.playEmote(emoteUrl);
-       } catch (error: any) {
-            console.error(`[Action] Error calling player.playEmote: ${error.message}`, error.stack);
-            throw error;
-       }
-    } else {
-       console.warn('[Action] player.playEmote method not found.');
-       throw new Error('HyperfyService: Emote functionality not available on player entity.');
     }
   }
 
@@ -1217,7 +1113,7 @@ export class HyperfyService extends Service {
                   // Send response back to Hyperfy
                   const emote = await this.pickEmoteForResponse(memory, responseContent.text);
                   if (emote) {
-                    this.playEmote(emote);
+                    this.emoteManager.playEmote(emote);
                   }
                   this.sendMessage(responseContent.text)
               }
