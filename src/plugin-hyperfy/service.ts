@@ -1174,7 +1174,7 @@ export class HyperfyService extends Service {
       template: `
   # Task: Determine which emote best fits {{agentName}}'s response, based on the character’s personality and intent.
   
-  {{bio}}
+  {{providers}}
   
   Guidelines:
   - You must pick exactly one emote from the list below that reflects {{agentName}}’s tone, emotion, or situation in the response.
