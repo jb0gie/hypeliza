@@ -69,6 +69,7 @@ export class HyperfyService extends Service {
   private isPhysicsSetup: boolean = false
   private connectionTime: number | null = null
   private emoteHashMap: Map<string, string> = new Map();
+  private currentEmoteTimeout: NodeJS.Timeout | null = null;
   private behaviorManager: BehaviorManager;
 
   public get currentWorldId(): UUID | null {
@@ -491,7 +492,30 @@ export class HyperfyService extends Service {
     agentPlayer.data.effect.emote = emoteUrl;
 
     console.info(`[Emote] Playing '${name}' → ${emoteUrl}`);
+
+    // Clear any existing emote timeout
+    if (this.currentEmoteTimeout) {
+      clearTimeout(this.currentEmoteTimeout);
+      this.currentEmoteTimeout = null;
+    }
+
+    // Get duration from EMOTES_LIST
+    const emoteMeta = EMOTES_LIST.find(e => e.name === name);
+    const duration = emoteMeta?.duration || 1;
+
+    if (duration) {
+      this.currentEmoteTimeout = setTimeout(() => {
+        if (agentPlayer.data?.effect?.emote === emoteUrl) {
+          agentPlayer.data.effect.emote = null;
+          console.info(`[Emote] Emote '${name}' cleared after ${duration}s`);
+        }
+        this.currentEmoteTimeout = null;
+      }, duration * 1000);
+    } else {
+      console.warn(`[Emote] No duration found for '${name}', emote will stay active.`);
+    }
   }
+
 
   private startAppearancePolling(): void {
     if (this.appearanceIntervalId) clearInterval(this.appearanceIntervalId);
