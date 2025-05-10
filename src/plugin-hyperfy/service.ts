@@ -1177,18 +1177,12 @@ export class HyperfyService extends Service {
   {{providers}}
   
   Guidelines:
-  - You must pick exactly one emote from the list below that reflects {{agentName}}’s tone, emotion, or situation in the response.
-  - Choose from the perspective of {{agentName}}, not just literally.
-  - If none are appropriate, return: null
-  
-  Conversation:
-  User said: ${receiveMemory.content.text}
-  {{agentName}} replied: "${responseText}"
-  
-  Available Emotes:
-  ${emoteListText}
-  
-  Respond ONLY with one emote name (e.g. "crying") or "null".
+  - ONLY pick an emote if {{agentName}}’s response shows a clear emotional tone (e.g. joy, frustration, sarcasm) or strong contextual intent (e.g. celebration, mockery).
+  - DO NOT pick an emote for neutral, factual, or generic replies. If unsure, default to "null".
+  - Emotes should enhance the meaning or delivery of the message from {{agentName}}’s perspective, not just match keywords.
+  - Respond with exactly one emote name (e.g. "crying") if appropriate, or "null" if no emote fits.
+
+  Respond ONLY with one emote name or "null".
   `.trim(),
     });
   
