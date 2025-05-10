@@ -10,7 +10,9 @@ import {
   type IAgentRuntime,
   logger,
   type Memory,
-  Service
+  Service,
+  ModelType,
+  composePromptFromState
 } from '@elizaos/core'
 import crypto from 'crypto'
 import fs from 'fs/promises'
@@ -22,14 +24,10 @@ import { AgentControls } from './controls'
 import { AgentLoader } from './loader'
 import { Vector3Enhanced } from './hyperfy/src/core/extras/Vector3Enhanced.js'
 import { loadPhysX } from './physx/loadPhysX.js'
-
-async function hashFileBuffer(buffer: Buffer): Promise<string> {
-  const hashBuf = await crypto.subtle.digest('SHA-256', buffer)
-  const hash = Array.from(new Uint8Array(hashBuf))
-    .map(b => b.toString(16).padStart(2, '0'))
-    .join('')
-  return hash
-}
+import { BehaviorManager } from "./behavior-manager.js"
+import { EmoteManager } from './emote-manager.js'
+import { EMOTES_LIST } from './constants.js'
+import { hashFileBuffer } from './utils'
 
 const LOCAL_AVATAR_PATH = process.env.HYPERFY_AGENT_AVATAR_PATH || './avatar.vrm'
 
@@ -66,6 +64,10 @@ export class HyperfyService extends Service {
   private PHYSX: any = null
   private isPhysicsSetup: boolean = false
   private connectionTime: number | null = null
+  private emoteHashMap: Map<string, string> = new Map();
+  private currentEmoteTimeout: NodeJS.Timeout | null = null;
+  private behaviorManager: BehaviorManager;
+  private emoteManager: EmoteManager;
 
   public get currentWorldId(): UUID | null {
     return this._currentWorldId
@@ -264,6 +266,11 @@ export class HyperfyService extends Service {
 
       this.isConnectedState = true
 
+      this.behaviorManager = new BehaviorManager(this.runtime);
+      this.behaviorManager.start();
+      
+      this.emoteManager = new EmoteManager(world);
+      
       this.startSimulation()
       this.startEntityUpdates()
 
@@ -304,103 +311,133 @@ export class HyperfyService extends Service {
     }
   }
 
-  private async uploadAndSetAvatar(): Promise<{ success: boolean, error?: string }> {
-    if (!this.world || !this.world.entities?.player || !this.world.network || !this.world.assetsUrl) {
-        console.warn("[Appearance] Cannot set avatar: World, player, network, or assetsUrl not ready.");
-        return { success: false, error: "Prerequisites not met" };
+  /**
+   * Uploads the character's avatar model and associated emote animations,
+   * sets the avatar URL locally, updates emote hash mappings,
+   * and notifies the server of the new avatar.
+   * 
+   * This function handles all assets required for character expression and animation.
+   */
+  private async uploadCharacterAssets(): Promise<{
+    success: boolean;
+    error?: string;
+  }> {
+    if (
+      !this.world ||
+      !this.world.entities?.player ||
+      !this.world.network ||
+      !this.world.assetsUrl
+    ) {
+      console.warn(
+        "[Appearance] Cannot set avatar: World, player, network, or assetsUrl not ready."
+      );
+      return { success: false, error: "Prerequisites not met" };
     }
 
-    const agentPlayer = this.world.entities.player
-    let fileName = ''
-    const localAvatarPath = path.resolve(LOCAL_AVATAR_PATH)
+    const agentPlayer = this.world.entities.player;
+    const localAvatarPath = path.resolve(LOCAL_AVATAR_PATH);
+    let fileName = "";
 
     try {
-        console.info(`[Appearance] Reading avatar file from: ${localAvatarPath}`)
-        const fileBuffer: Buffer = await fs.readFile(localAvatarPath)
-        fileName = path.basename(localAvatarPath)
-        const mimeType = fileName.endsWith('.vrm') ? 'model/gltf-binary' : 'application/octet-stream'
+      console.info(`[Appearance] Reading avatar file from: ${localAvatarPath}`);
+      const fileBuffer: Buffer = await fs.readFile(localAvatarPath);
+      fileName = path.basename(localAvatarPath);
+      const mimeType = fileName.endsWith(".vrm")
+        ? "model/gltf-binary"
+        : "application/octet-stream";
 
-        console.info(`[Appearance] Uploading ${fileName} (${(fileBuffer.length / 1024).toFixed(2)} KB, Type: ${mimeType})...`)
+      console.info(
+        `[Appearance] Uploading ${fileName} (${(fileBuffer.length / 1024).toFixed(2)} KB, Type: ${mimeType})...`
+      );
 
-        if (!crypto.subtle || typeof crypto.subtle.digest !== 'function') {
-            throw new Error("crypto.subtle.digest is not available. Ensure Node.js version supports Web Crypto API.");
-        }
-        const hash = await hashFileBuffer(fileBuffer);
-        const ext = fileName.split('.').pop()?.toLowerCase() || 'vrm';
-        const fullFileNameWithHash = `${hash}.${ext}`;
-        const baseUrl = this.world.assetsUrl.replace(/\/$/, '');
-        const constructedHttpUrl = `${baseUrl}/${fullFileNameWithHash}`;
-        console.info(`[Appearance] Constructed HTTP(S) URL: ${constructedHttpUrl}`)
+      if (!crypto.subtle || typeof crypto.subtle.digest !== "function") {
+        throw new Error(
+          "crypto.subtle.digest is not available. Ensure Node.js version supports Web Crypto API."
+        );
+      }
 
-        // --- Perform Upload and Server Update --- >
-        let uploadSuccessful = false;
-        if (typeof this.world.network.upload === 'function') {
-           console.info(`[Appearance] Calling world.network.upload for ${fullFileNameWithHash}...`);
-            try {
-                const fileForUpload = new File([fileBuffer], fileName, { type: mimeType });
+      const hash = await hashFileBuffer(fileBuffer);
+      const ext = fileName.split(".").pop()?.toLowerCase() || "vrm";
+      const fullFileNameWithHash = `${hash}.${ext}`;
+      const baseUrl = this.world.assetsUrl.replace(/\/$/, "");
+      const constructedHttpUrl = `${baseUrl}/${fullFileNameWithHash}`;
 
-                const uploadPromise = this.world.network.upload(fileForUpload);
+      if (typeof this.world.network.upload !== "function") {
+        console.warn(
+          "[Appearance] world.network.upload function not found. Cannot upload."
+        );
+        return { success: false, error: "Upload function unavailable" };
+      }
 
-                // Add a timeout for the upload operation (e.g., 30 seconds)
-                const UPLOAD_TIMEOUT_MS = 30000;
-                const timeoutPromise = new Promise((_resolve, reject) => 
-                    setTimeout(() => reject(new Error('Upload timed out')), UPLOAD_TIMEOUT_MS)
-                );
+      try {
+        console.info(
+          `[Appearance] Uploading avatar to ${constructedHttpUrl}...`
+        );
+        const fileForUpload = new File([fileBuffer], fileName, {
+          type: mimeType,
+        });
 
-                // Assume upload returns a promise that resolves on success
-                await Promise.race([uploadPromise, timeoutPromise]);
+        const uploadPromise = this.world.network.upload(fileForUpload);
+        const timeoutPromise = new Promise((_resolve, reject) =>
+          setTimeout(() => reject(new Error("Upload timed out")), 30000)
+        );
 
-                // --- Add logging immediately after await --- >
-                console.info(`[Appearance] Awaited world.network.upload successfully finished for ${fullFileNameWithHash}.`);
-                // <-------------------------------------------
+        await Promise.race([uploadPromise, timeoutPromise]);
+        console.info(`[Appearance] Avatar uploaded successfully.`);
+      } catch (uploadError: any) {
+        console.error(
+          `[Appearance] Avatar upload failed: ${uploadError.message}`,
+          uploadError.stack
+        );
+        return {
+          success: false,
+          error: `Upload failed: ${uploadError.message}`,
+        };
+      }
 
-                console.info(`[Appearance] world.network.upload completed for ${fullFileNameWithHash}.`);
-                uploadSuccessful = true;
-             } catch (uploadError: any) {
-                console.error(`[Appearance] world.network.upload failed: ${uploadError.message}`, uploadError.stack);
-                // Don't throw here, let the function return failure status
-                return { success: false, error: `Upload failed: ${uploadError.message}` };
-           }
-        } else {
-           console.warn("[Appearance] world.network.upload function not found. Cannot upload.");
-            return { success: false, error: "Upload function unavailable" }; // Cannot proceed without upload
-        }
+      // Apply avatar locally
+      if (agentPlayer && typeof agentPlayer.setSessionAvatar === "function") {
+        agentPlayer.setSessionAvatar(constructedHttpUrl);
+      } else {
+        console.warn(
+          "[Appearance] agentPlayer.setSessionAvatar not available."
+        );
+      }
 
-        // --- Apply change locally *AFTER* successful upload --- >
-        if (uploadSuccessful && agentPlayer && typeof agentPlayer.setSessionAvatar === 'function') {
-             console.info(`[Appearance] Applying session avatar locally (post-upload): ${constructedHttpUrl}`);
-             agentPlayer.setSessionAvatar(constructedHttpUrl);
-        } else if (uploadSuccessful) {
-             // Still log warning if function is missing, even post-upload
-             console.warn("[Appearance] agentPlayer.setSessionAvatar not available for local application (post-upload).");
-        } else {
-            // If upload failed, we don't apply locally
-             logger.debug("[Appearance] Skipping local avatar application due to upload failure.")
-        }
-        // <---------------------------------------------------
+      // Upload emotes
+      await this.emoteManager.uploadEmotes();
 
-        // Only send network message if upload was successful
-        if (uploadSuccessful && this.world.network && typeof this.world.network.send === 'function') {
-            this.world.network.send('playerSessionAvatar', { avatar: constructedHttpUrl });
-            console.info(`[Appearance] Sent playerSessionAvatar network message with: ${constructedHttpUrl}`);
-            return { success: true }; // Indicate overall success
-        } else if (!uploadSuccessful) {
-            // This case is handled by the return inside the upload try-catch
-            return { success: false, error: "Upload did not succeed (state unknown)" }; 
-        } else {
-             console.error("[Appearance] Upload succeeded but world.network.send is not available.");
-             return { success: false, error: "Network send unavailable after upload" };
-        }
+      // Notify server
+      if (typeof this.world.network.send === "function") {
+        this.world.network.send("playerSessionAvatar", {
+          avatar: constructedHttpUrl,
+        });
+        console.info(
+          `[Appearance] Sent playerSessionAvatar with: ${constructedHttpUrl}`
+        );
+      } else {
+        console.error(
+          "[Appearance] Upload succeeded but world.network.send is not available."
+        );
+      }
 
+      return { success: true };
     } catch (error: any) {
-        if (error.code === 'ENOENT') {
-            console.error(`[Appearance] Error: Avatar file not found at ${localAvatarPath}. CWD: ${process.cwd()}`)
-        } else {
-            console.error("[Appearance] Unexpected error during avatar process:", error.message, error.stack)
-        }
-        return { success: false, error: error.message };
+      if (error.code === "ENOENT") {
+        console.error(
+          `[Appearance] Avatar file not found at ${localAvatarPath}. CWD: ${process.cwd()}`
+        );
+      } else {
+        console.error(
+          "[Appearance] Unexpected error during avatar process:",
+          error.message,
+          error.stack
+        );
+      }
+      return { success: false, error: error.message };
     }
   }
+
 
   private startAppearancePolling(): void {
     if (this.appearanceIntervalId) clearInterval(this.appearanceIntervalId);
@@ -451,7 +488,7 @@ export class HyperfyService extends Service {
              // --- Set Avatar (if not already done AND assets URL ready) ---
              if (!pollingTasks.avatar && assetsUrlReady) {
                  console.info(`[Appearance Polling] Player (ID: ${agentPlayerId}), network, assetsUrl ready. Attempting avatar upload and set...`);
-                 const result = await this.uploadAndSetAvatar();
+                 const result = await this.uploadCharacterAssets();
 
                  if (result.success) {
                      this.appearanceSet = true; // Update global state
@@ -691,30 +728,6 @@ export class HyperfyService extends Service {
     } catch (error: any) {
       console.error('Error setting key:', error.message, error.stack)
       throw error
-    }
-  }
-
-  /**
-   * Attempts to play an emote using its URL.
-   */
-  async emote(emoteUrl: string): Promise<void> {
-    if (!this.isConnected() || !this.world?.entities?.player) {
-      throw new Error('HyperfyService: Cannot play emote. Player not ready.');
-    }
-    const player = this.world.entities.player;
-
-    // PlayerLocal has a playEmote method
-    if (typeof player.playEmote === 'function') {
-       console.info(`[Action] Attempting to play emote: ${emoteUrl}`);
-       try {
-            player.playEmote(emoteUrl);
-       } catch (error: any) {
-            console.error(`[Action] Error calling player.playEmote: ${error.message}`, error.stack);
-            throw error;
-       }
-    } else {
-       console.warn('[Action] player.playEmote method not found.');
-       throw new Error('HyperfyService: Emote functionality not available on player entity.');
     }
   }
 
@@ -1098,6 +1111,10 @@ export class HyperfyService extends Service {
                 if (responseContent.text) {
                   console.info(`[Hyperfy Chat Response] ${responseContent.text}`)
                   // Send response back to Hyperfy
+                  const emote = await this.pickEmoteForResponse(memory, responseContent.text);
+                  if (emote) {
+                    this.emoteManager.playEmote(emote);
+                  }
                   this.sendMessage(responseContent.text)
               }
                 return [];
@@ -1142,6 +1159,51 @@ export class HyperfyService extends Service {
       }
     })
   }
+  private async pickEmoteForResponse(
+    receiveMemory: Memory,
+    responseText: string
+  ): Promise<string | null> {
+    const state = await this.runtime.composeState(receiveMemory);
+  
+    const emoteListText = EMOTES_LIST.map(
+      (e) => `- ${e.name}: ${e.description}`
+    ).join('\n');
+  
+    const emotePickPrompt = composePromptFromState({
+      state,
+      template: `
+  # Task: Determine which emote best fits {{agentName}}'s response, based on the character’s personality and intent.
+  
+  {{bio}}
+  
+  Guidelines:
+  - You must pick exactly one emote from the list below that reflects {{agentName}}’s tone, emotion, or situation in the response.
+  - Choose from the perspective of {{agentName}}, not just literally.
+  - If none are appropriate, return: null
+  
+  Conversation:
+  User said: ${receiveMemory.content.text}
+  {{agentName}} replied: "${responseText}"
+  
+  Available Emotes:
+  ${emoteListText}
+  
+  Respond ONLY with one emote name (e.g. "crying") or "null".
+  `.trim(),
+    });
+  
+    const emoteResultRaw = await this.runtime.useModel(ModelType.TEXT_SMALL, {
+      prompt: emotePickPrompt,
+    });
+  
+    const result = emoteResultRaw?.trim().toLowerCase().replace(/["']/g, '');
+  
+    if (!result || result === 'null') return null;
+  
+    const match = EMOTES_LIST.find((e) => e.name.toLowerCase() === result);
+    return match ? match.name : null;
+  }
+  
 
   private startSimulation(): void {
     if (this.tickIntervalId) clearTimeout(this.tickIntervalId);
