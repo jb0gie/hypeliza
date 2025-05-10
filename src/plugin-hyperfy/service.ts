@@ -10,7 +10,9 @@ import {
   type IAgentRuntime,
   logger,
   type Memory,
-  Service
+  Service,
+  ModelType,
+  composePromptFromState
 } from '@elizaos/core'
 import crypto from 'crypto'
 import fs from 'fs/promises'
@@ -1213,6 +1215,10 @@ export class HyperfyService extends Service {
                 if (responseContent.text) {
                   console.info(`[Hyperfy Chat Response] ${responseContent.text}`)
                   // Send response back to Hyperfy
+                  const emote = await this.pickEmoteForResponse(memory, responseContent.text);
+                  if (emote) {
+                    this.playEmote(emote);
+                  }
                   this.sendMessage(responseContent.text)
               }
                 return [];
@@ -1257,6 +1263,51 @@ export class HyperfyService extends Service {
       }
     })
   }
+  private async pickEmoteForResponse(
+    receiveMemory: Memory,
+    responseText: string
+  ): Promise<string | null> {
+    const state = await this.runtime.composeState(receiveMemory);
+  
+    const emoteListText = EMOTES_LIST.map(
+      (e) => `- ${e.name}: ${e.description}`
+    ).join('\n');
+  
+    const emotePickPrompt = composePromptFromState({
+      state,
+      template: `
+  # Task: Determine which emote best fits {{agentName}}'s response, based on the character’s personality and intent.
+  
+  {{bio}}
+  
+  Guidelines:
+  - You must pick exactly one emote from the list below that reflects {{agentName}}’s tone, emotion, or situation in the response.
+  - Choose from the perspective of {{agentName}}, not just literally.
+  - If none are appropriate, return: null
+  
+  Conversation:
+  User said: ${receiveMemory.content.text}
+  {{agentName}} replied: "${responseText}"
+  
+  Available Emotes:
+  ${emoteListText}
+  
+  Respond ONLY with one emote name (e.g. "crying") or "null".
+  `.trim(),
+    });
+  
+    const emoteResultRaw = await this.runtime.useModel(ModelType.TEXT_SMALL, {
+      prompt: emotePickPrompt,
+    });
+  
+    const result = emoteResultRaw?.trim().toLowerCase().replace(/["']/g, '');
+  
+    if (!result || result === 'null') return null;
+  
+    const match = EMOTES_LIST.find((e) => e.name.toLowerCase() === result);
+    return match ? match.name : null;
+  }
+  
 
   private startSimulation(): void {
     if (this.tickIntervalId) clearTimeout(this.tickIntervalId);
