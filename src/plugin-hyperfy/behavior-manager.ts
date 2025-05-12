@@ -168,7 +168,7 @@ export class BehaviorManager {
         const callback: HandlerCallback = async (responseContent: Content): Promise<Memory[]> => {
           console.info(`[Hyperfy Chat Callback] Received response: ${JSON.stringify(responseContent)}`)
           if (responseContent.text) {
-            console.info(`[Hyperfy Chat Response] ${responseContent.text}`)
+            console.log(`[Hyperfy Chat Response] ${responseContent}`)
             // Send response back to Hyperfy
             const emote = 
               await this.pickEmoteForResponse(memory) || "TALK";
@@ -177,7 +177,22 @@ export class BehaviorManager {
             emoteManager.playEmote(emote);
             const messageManager = service.getMessageManager();
             messageManager.sendMessage(responseContent.text)
-        }
+
+            const callbackMemory: Memory = {
+              id: createUniqueUuid(this.runtime, Date.now().toString()),
+              entityId: this.runtime.agentId,
+              agentId: this.runtime.agentId,
+              content: {
+                ...responseContent,
+                channelType: ChannelType.WORLD,
+                emote
+              },
+              roomId: elizaRoomId,
+              createdAt: Date.now(),
+            };
+            
+            await this.runtime.createMemory(callbackMemory, 'messages');
+          }
           return [];
         };
 
