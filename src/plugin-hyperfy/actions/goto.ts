@@ -112,7 +112,7 @@ export const hyperfyGotoEntityAction: Action = {
         // Tell the controls system to start navigating to the single target
         const targetName = service.getEntityName(targetEntityId);
         logger.info(`HYPERFY_GOTO_ENTITY: Requesting navigation via controls to entity ${targetName || targetEntityId} at (${targetPosition.x.toFixed(2)}, ${targetPosition.z.toFixed(2)})`);
-        controls.startNavigation(targetPosition.x, targetPosition.z); // Use controls method
+        controls.goto(targetPosition.x, targetPosition.z); // Use controls method
 
         // Provide initial confirmation
         await callback({

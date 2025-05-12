@@ -151,7 +151,7 @@ export class AgentControls extends System {
         const targetZ = pos.z + Math.sin(angle) * radius;
 
         try {
-          await this._navigateTo(targetX, targetZ, token);
+          await this.startNavigation(targetX, targetZ, token);
         } catch (e) {
           logger.warn("[Random Walk] Navigation error:", e);
         }
@@ -178,10 +178,9 @@ export class AgentControls extends System {
   /**
    * Starts navigating the agent towards the target X, Z coordinates.
    */
-
-  public async startNavigation(x: number, z: number): Promise<void> {
+  public async goto(x: number, z: number): Promise<void> {
     this.stopRandomWalk();
-    await this._navigateTo(x, z);
+    await this.startNavigation(x, z);
   }
 
   /**
@@ -221,9 +220,9 @@ export class AgentControls extends System {
    * (e.g., 'W' for forward movement) until the agent reaches the destination or navigation is stopped.
    *
    * This method is isolated and does not handle random walk logic — it's a low-level navigation primitive.
-   * Should be called by `startNavigation` or `startRandomWalk` with an optional NavigationToken to allow early cancellation.
+   * Should be called by `goto` or `startRandomWalk` with an optional NavigationToken to allow early cancellation.
    */
-  private async _navigateTo(x: number, z: number, token?: NavigationToken): Promise<void> {
+  private async startNavigation(x: number, z: number, token?: NavigationToken): Promise<void> {
     this.stopNavigation("starting new navigation");
   
     this._navigationTarget = new THREE.Vector3(x, 0, z);
@@ -234,7 +233,7 @@ export class AgentControls extends System {
     const tickDelay = (ms: number) => new Promise(res => setTimeout(res, ms));
   
     while (this._isNavigating && this._navigationTarget && (!token || !token.aborted)) {
-      if (!this._validatePlayerState("_navigateTo")) break;
+      if (!this._validatePlayerState("startNavigation")) break;
   
       const playerPosition = v1.copy(player.base.position);
       const distanceXZ = playerPosition.clone().setY(0).distanceTo(this._navigationTarget.clone().setY(0));
