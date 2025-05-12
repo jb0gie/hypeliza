@@ -1111,10 +1111,11 @@ export class HyperfyService extends Service {
                 if (responseContent.text) {
                   console.info(`[Hyperfy Chat Response] ${responseContent.text}`)
                   // Send response back to Hyperfy
-                  const emote = await this.pickEmoteForResponse(memory, responseContent.text);
-                  if (emote) {
-                    this.emoteManager.playEmote(emote);
-                  }
+                  const emote = 
+                    await this.pickEmoteForResponse(memory, responseContent.text) || "TALK";
+
+                  this.emoteManager.playEmote(emote);
+                  
                   this.sendMessage(responseContent.text)
               }
                 return [];
