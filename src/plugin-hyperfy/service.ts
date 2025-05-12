@@ -26,7 +26,7 @@ import { Vector3Enhanced } from './hyperfy/src/core/extras/Vector3Enhanced.js'
 import { loadPhysX } from './physx/loadPhysX.js'
 import { BehaviorManager } from "./behavior-manager.js"
 import { EmoteManager } from './emote-manager.js'
-import { EMOTES_LIST } from './constants.js'
+import { MessageManager } from './message-manager.js'
 import { hashFileBuffer } from './utils'
 
 const LOCAL_AVATAR_PATH = process.env.HYPERFY_AGENT_AVATAR_PATH || './avatar.vrm'
@@ -68,6 +68,7 @@ export class HyperfyService extends Service {
   private currentEmoteTimeout: NodeJS.Timeout | null = null;
   private behaviorManager: BehaviorManager;
   private emoteManager: EmoteManager;
+  private messageManager: MessageManager;
 
   public get currentWorldId(): UUID | null {
     return this._currentWorldId
@@ -266,10 +267,11 @@ export class HyperfyService extends Service {
 
       this.isConnectedState = true
 
+      this.emoteManager = new EmoteManager(world);
+      this.messageManager = new MessageManager(this.runtime);
+
       this.behaviorManager = new BehaviorManager(this.runtime);
       this.behaviorManager.start();
-      
-      this.emoteManager = new EmoteManager(world);
       
       this.startSimulation()
       this.startEntityUpdates()
@@ -688,37 +690,6 @@ export class HyperfyService extends Service {
       return new Map(this.currentEntities);
   }
 
-  async sendMessage(text: string): Promise<void> {
-    if (!this.isConnected() || !this.world?.chat || !this.world?.entities?.player) {
-      console.error('HyperfyService: Cannot send message. Not ready.')
-      return
-    }
-
-    try {
-      const agentPlayerId = this.world.entities.player.data.id
-      const agentPlayerName = this.getEntityName(agentPlayerId) || this.world.entities.player.data?.name || 'Hyperliza'
-
-      console.info(`HyperfyService sending message: "${text}" as ${agentPlayerName} (${agentPlayerId})`)
-
-      if (typeof this.world.chat.add !== 'function') {
-        throw new Error('world.chat.add is not a function')
-      }
-
-      this.world.chat.add(
-        {
-          body: text,
-          fromId: agentPlayerId,
-          from: agentPlayerName,
-        },
-        true
-      )
-
-    } catch (error: any) {
-      console.error('Error sending Hyperfy message:', error.message, error.stack)
-      throw error
-    }
-  }
-
   async move(key: string, isDown: boolean): Promise<void> {
     if (!this.isConnected() || !this.controls) throw new Error('HyperfyService: Cannot move. Not connected or controls unavailable.')
     if (typeof this.controls.setKey !== 'function') throw new Error('HyperfyService: controls.setKey method is missing.')
@@ -1001,10 +972,7 @@ export class HyperfyService extends Service {
     this.world.chat.subscribe((msgs: any[]) => {
       // Wait for player entity (ensures world/chat exist too)
       if (!this.world || !this.world.chat || !this.world.entities?.player || !this.connectionTime) return
-
-      const agentPlayerId = this.world.entities.player.data.id // Get agent's ID
-      const agentPlayerName = this.getEntityName(agentPlayerId) || this.world.entities.player.data?.name || 'Hyperliza'; // Use name getter
-
+  
       const newMessagesFound: any[] = [] // Temporary list for new messages
 
       // Step 1: Identify new messages and update processed set
@@ -1033,174 +1001,12 @@ export class HyperfyService extends Service {
         console.info(`[Chat] Found ${newMessagesFound.length} new messages to process.`)
 
         newMessagesFound.forEach(async (msg: any) => {
-          const senderName = msg.from || 'System'
-          const messageBody = msg.body || ''
-          console.info(`[Chat Received] From: ${senderName}, ID: ${msg.id}, Body: "${messageBody}"`)
-
-          // Respond only to messages not from the agent itself
-          if (msg.fromId && msg.fromId !== agentPlayerId) {
-              console.info(`[Hyperfy Chat] Processing message from ${senderName}`)
-
-              // First, ensure we register the entity (world, room, sender) in Eliza properly
-              const hyperfyWorldId = createUniqueUuid(this.runtime, 'hyperfy-world') as UUID
-              const elizaRoomId = createUniqueUuid(this.runtime, this._currentWorldId || 'hyperfy-unknown-world')
-              const entityId = createUniqueUuid(this.runtime, msg.fromId.toString()) as UUID
-
-              console.debug(`[Hyperfy Chat] Creating world: ${hyperfyWorldId}`)
-              // Register the world if it doesn't exist
-              await this.runtime.ensureWorldExists({
-                id: hyperfyWorldId,
-                name: 'Hyperfy World',
-                agentId: this.runtime.agentId,
-                serverId: 'hyperfy',
-                metadata: {
-                  type: 'hyperfy',
-                },
-              })
-
-              console.debug(`[Hyperfy Chat] Creating room: ${elizaRoomId}`)
-              // Register the room if it doesn't exist
-              await this.runtime.ensureRoomExists({
-                id: elizaRoomId,
-                name: 'Hyperfy Chat',
-                source: 'hyperfy',
-                type: ChannelType.WORLD,
-                channelId: this._currentWorldId,
-                serverId: 'hyperfy',
-                worldId: hyperfyWorldId,
-              })
-
-              console.debug(`[Hyperfy Chat] Creating entity connection for: ${entityId}`)
-              // Ensure connection for the sender entity
-              await this.runtime.ensureConnection({
-                entityId: entityId,
-                roomId: elizaRoomId,
-                userName: senderName,
-                name: senderName,
-                source: 'hyperfy',
-                channelId: this._currentWorldId,
-                serverId: 'hyperfy',
-                type: ChannelType.WORLD,
-                worldId: hyperfyWorldId,
-              })
-
-              // Create the message memory
-              const messageId = createUniqueUuid(this.runtime, msg.id.toString()) as UUID
-              console.debug(`[Hyperfy Chat] Creating memory: ${messageId}`)
-              const memory: Memory = {
-                id: messageId,
-                entityId: entityId,
-                agentId: this.runtime.agentId,
-                roomId: elizaRoomId,
-                worldId: hyperfyWorldId,
-                content: {
-                  text: messageBody,
-                  source: 'hyperfy',
-                  channelType: ChannelType.WORLD,
-                  metadata: {
-                    hyperfyMessageId: msg.id,
-                    hyperfyFromId: msg.fromId,
-                    hyperfyFromName: senderName,
-                  },
-                },
-                createdAt: Date.now(),
-              }
-
-              // Create a callback function to handle responses
-              const callback: HandlerCallback = async (responseContent: Content): Promise<Memory[]> => {
-                console.info(`[Hyperfy Chat Callback] Received response: ${JSON.stringify(responseContent)}`)
-                if (responseContent.text) {
-                  console.info(`[Hyperfy Chat Response] ${responseContent.text}`)
-                  // Send response back to Hyperfy
-                  const emote = 
-                    await this.pickEmoteForResponse(memory, responseContent.text) || "TALK";
-
-                  this.emoteManager.playEmote(emote);
-                  
-                  this.sendMessage(responseContent.text)
-              }
-                return [];
-              };
-
-              // Ensure the entity actually exists in DB before event emission
-              try {
-                const entity = await this.runtime.getEntityById(entityId)
-                if (!entity) {
-                  console.warn(
-                    `[Hyperfy Chat] Entity ${entityId} not found in database after creation, creating directly`
-                  )
-                  await this.runtime.createEntity({
-                    id: entityId,
-                    names: [senderName],
-                    agentId: this.runtime.agentId,
-                    metadata: {
-                      hyperfy: {
-                        id: msg.fromId,
-                        username: senderName,
-                        name: senderName,
-                      },
-                    },
-                  })
-                }
-              } catch (error) {
-                console.error(`[Hyperfy Chat] Error checking/creating entity: ${error}`)
-              }
-
-              // Emit the MESSAGE_RECEIVED event to trigger the message handler
-              console.info(`[Hyperfy Chat] Emitting MESSAGE_RECEIVED event for message: ${messageId}`)
-              await this.runtime.emitEvent(EventType.MESSAGE_RECEIVED, {
-                runtime: this.runtime,
-                message: memory,
-                callback: callback,
-                source: 'hyperfy',
-              })
-
-              console.info(`[Hyperfy Chat] Successfully emitted event for message: ${messageId}`)
-          }
+          await this.behaviorManager.handleMessage(msg);
         })
       }
     })
   }
-  private async pickEmoteForResponse(
-    receiveMemory: Memory,
-    responseText: string
-  ): Promise<string | null> {
-    const state = await this.runtime.composeState(receiveMemory);
   
-    const emoteListText = EMOTES_LIST.map(
-      (e) => `- ${e.name}: ${e.description}`
-    ).join('\n');
-  
-    const emotePickPrompt = composePromptFromState({
-      state,
-      template: `
-  # Task: Determine which emote best fits {{agentName}}'s response, based on the character’s personality and intent.
-  
-  {{providers}}
-  
-  Guidelines:
-  - ONLY pick an emote if {{agentName}}’s response shows a clear emotional tone (e.g. joy, frustration, sarcasm) or strong contextual intent (e.g. celebration, mockery).
-  - DO NOT pick an emote for neutral, factual, or generic replies. If unsure, default to "null".
-  - Emotes should enhance the meaning or delivery of the message from {{agentName}}’s perspective, not just match keywords.
-  - Respond with exactly one emote name (e.g. "crying") if appropriate, or "null" if no emote fits.
-
-  Respond ONLY with one emote name or "null".
-  `.trim(),
-    });
-  
-    const emoteResultRaw = await this.runtime.useModel(ModelType.TEXT_SMALL, {
-      prompt: emotePickPrompt,
-    });
-  
-    const result = emoteResultRaw?.trim().toLowerCase().replace(/["']/g, '');
-  
-    if (!result || result === 'null') return null;
-  
-    const match = EMOTES_LIST.find((e) => e.name.toLowerCase() === result);
-    return match ? match.name : null;
-  }
-  
-
   private startSimulation(): void {
     if (this.tickIntervalId) clearTimeout(this.tickIntervalId);
     const tickIntervalMs = 1000 / HYPERFY_TICK_RATE;
@@ -1263,4 +1069,16 @@ export class HyperfyService extends Service {
 
   private startRandomChatting(): void { /* ... existing ... */ }
   private stopRandomChatting(): void { /* ... existing ... */ }
+
+  getEmoteManager() {
+    return this.emoteManager;
+  }
+
+  getBehaviorManager() {
+    return this.behaviorManager;
+  }
+
+  getMessageManager() {
+    return this.messageManager;
+  }
 }
