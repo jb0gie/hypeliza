@@ -1,6 +1,7 @@
 import fs from 'fs/promises'
 import path from 'path'
 import { EMOTES_LIST } from './constants.js'
+import { Emotes } from './hyperfy/src/core/extras/playerEmotes.js'
 import { hashFileBuffer } from './utils'
 import { logger } from '@elizaos/core'
 
@@ -54,7 +55,9 @@ export class EmoteManager {
   }
 
   playEmote(name: string) {
-    const hashName = this.emoteHashMap.get(name);
+    const fallback = (Emotes as Record<string, string>)[name];
+    const hashName = this.emoteHashMap.get(name) || fallback;
+
     if (!hashName) {
       console.warn(`[Emote] Emote '${name}' not found.`);
       return;
@@ -66,7 +69,7 @@ export class EmoteManager {
       return;
     }
 
-    const emoteUrl = `asset://${hashName}`;
+    const emoteUrl = hashName.startsWith('asset://') ? hashName : `asset://${hashName}`;
     agentPlayer.data.effect = agentPlayer.data.effect || {};
     agentPlayer.data.effect.emote = emoteUrl;
 
@@ -80,7 +83,7 @@ export class EmoteManager {
 
     // Get duration from EMOTES_LIST
     const emoteMeta = EMOTES_LIST.find(e => e.name === name);
-    const duration = emoteMeta?.duration || 1;
+    const duration = emoteMeta?.duration || 1.5;
 
     if (duration) {
       this.currentEmoteTimeout = setTimeout(() => {
