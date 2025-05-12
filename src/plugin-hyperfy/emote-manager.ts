@@ -9,6 +9,8 @@ export class EmoteManager {
   private world: any // replace `any` with more specific type if available
   private emoteHashMap: Map<string, string>
   private currentEmoteTimeout: NodeJS.Timeout | null
+  private movementCheckInterval: NodeJS.Timeout | null = null;
+
   constructor(world) {
     this.world = world
     this.emoteHashMap = new Map()
@@ -75,26 +77,42 @@ export class EmoteManager {
 
     console.info(`[Emote] Playing '${name}' → ${emoteUrl}`);
 
-    // Clear any existing emote timeout
-    if (this.currentEmoteTimeout) {
-      clearTimeout(this.currentEmoteTimeout);
-      this.currentEmoteTimeout = null;
-    }
+    this.clearTimers();
 
     // Get duration from EMOTES_LIST
     const emoteMeta = EMOTES_LIST.find(e => e.name === name);
     const duration = emoteMeta?.duration || 1.5;
 
-    if (duration) {
-      this.currentEmoteTimeout = setTimeout(() => {
-        if (agentPlayer.data?.effect?.emote === emoteUrl) {
-          agentPlayer.data.effect.emote = null;
-          console.info(`[Emote] Emote '${name}' cleared after ${duration}s`);
-        }
-        this.currentEmoteTimeout = null;
-      }, duration * 1000);
-    } else {
-      console.warn(`[Emote] No duration found for '${name}', emote will stay active.`);
+    this.movementCheckInterval = setInterval(() => {
+      if (agentPlayer.moving) {
+        logger.info(`[EmoteManager] '${name}' cancelled early due to movement`);
+        this.clearEmote(agentPlayer);
+      }
+    }, 100);
+
+    this.currentEmoteTimeout = setTimeout(() => {
+      if (agentPlayer.data.effect?.emote === emoteUrl) {
+        logger.info(`[EmoteManager] '${name}' finished after ${duration}s`);
+        this.clearEmote(agentPlayer);
+      }
+    }, duration * 1000);
+  }
+
+  private clearEmote(player) {
+    if (player.data?.effect) {
+      player.data.effect.emote = null;
+    }
+    this.clearTimers();
+  }
+
+  private clearTimers() {
+    if (this.currentEmoteTimeout) {
+      clearTimeout(this.currentEmoteTimeout);
+      this.currentEmoteTimeout = null;
+    }
+    if (this.movementCheckInterval) {
+      clearInterval(this.movementCheckInterval);
+      this.movementCheckInterval = null;
     }
   }
 }

@@ -40,7 +40,8 @@ export const hyperfyChatAction: Action = {
       }
   
       try {
-        await service.sendMessage(textToSend);
+        const messageManager = service.getMessageManager();
+        await messageManager.sendMessage(textToSend);
         // Confirmation callback
         await callback({
            text: `Sent message to Hyperfy: "${textToSend}"`,
