@@ -796,7 +796,8 @@ export class HyperfyService extends Service {
           const agentPlayer = this.world.entities.player;
               agentPlayer.modify({ name: newName });
               agentPlayer.data.name = newName
-
+          
+          this.world.network.send('entityModified', { id: agentPlayer.data.id, name: newName })
               console.debug(`[Action] Called agentPlayer.modify({ name: "${newName}" })`);
 
       } catch (error: any) {
@@ -1037,7 +1038,7 @@ export class HyperfyService extends Service {
           console.info(`[Chat Received] From: ${senderName}, ID: ${msg.id}, Body: "${messageBody}"`)
 
           // Respond only to messages not from the agent itself
-          if (msg.fromId !== agentPlayerId) {
+          if (msg.fromId && msg.fromId !== agentPlayerId) {
               console.info(`[Hyperfy Chat] Processing message from ${senderName}`)
 
               // First, ensure we register the entity (world, room, sender) in Eliza properly
