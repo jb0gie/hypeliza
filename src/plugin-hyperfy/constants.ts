@@ -91,3 +91,22 @@ export const EMOTES_LIST = [
     }
 ];
   
+
+export const HYPERFY_ACTIONS = [
+  {
+    name: 'HYPERFY_GOTO_ENTITY',
+    description: 'Choose this when {{agentName}} notices a nearby user that they haven’t interacted with yet, or when a previous conversation feels unfinished and approaching the user makes sense. {{agentName}} must review the recent Conversation Messages and world state before deciding to move. Only use this action if there’s a clear reason to walk toward someone — such as initiating friendly presence or continuing a previously started interaction.'
+  },
+  {
+    name: 'HYPERFY_WALK_RANDOMLY',
+    description: 'Choose this when the conversation is quiet or winding down, and {{agentName}} wants to stay present without speaking. Use it based on the current situation and conversation vibe — when there’s nothing urgent to say or do, but movement feels more natural than being idle.'
+  },
+  {
+    name: 'REPLY',
+    description: 'You {{agentName}} need to carefully review the recent Conversation Messages. If the user has already been acknowledged or a similar message was sent recently, do not repeat it. Only choose this action and respond if there is new context, user engagement, or something helpful and different to say.'
+  },
+  {
+    name: 'IGNORE',
+    description: 'Only choose this if {{agentName}} has reviewed all the available actions above and decided that none of them are appropriate. Use it when there’s nothing meaningful to say or do in the current situation.'
+  }
+]

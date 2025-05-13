@@ -1,7 +1,8 @@
 import { ChannelType, Content, EventType, HandlerCallback, IAgentRuntime, Memory, ModelType, UUID, composePromptFromState, createUniqueUuid, formatMessages, formatPosts, getEntityDetails, logger, parseKeyValueXml } from "@elizaos/core";
-import { EMOTES_LIST } from "./constants";
+import { EMOTES_LIST, HYPERFY_ACTIONS } from "./constants";
 import { AgentControls } from "./controls";
 import { HyperfyService } from "./service";
+import { autoTemplate, emotePickTemplate } from "./templates";
 
 const TIME_INTERVAL = 30000;
 
@@ -101,77 +102,8 @@ export class BehaviorManager {
         'HYPERFY_EMOTE_LIST',
       ]
     );
-    const HYPERFY_ACTIONS = [
-      {
-        name: 'HYPERFY_GOTO_ENTITY',
-        description: 'Choose this when {{agentName}} notices a nearby user that they haven’t interacted with yet, or when a previous conversation feels unfinished and approaching the user makes sense. {{agentName}} must review the recent Conversation Messages and world state before deciding to move. Only use this action if there’s a clear reason to walk toward someone — such as initiating friendly presence or continuing a previously started interaction.'
-      },
-      {
-        name: 'HYPERFY_WALK_RANDOMLY',
-        description: 'Choose this when the conversation is quiet or winding down, and {{agentName}} wants to stay present without speaking. Use it based on the current situation and conversation vibe — when there’s nothing urgent to say or do, but movement feels more natural than being idle.'
-      },
-      {
-        name: 'REPLY',
-        description: 'You {{agentName}} need to carefully review the recent Conversation Messages. If the user has already been acknowledged or a similar message was sent recently, do not repeat it. Only choose this action and respond if there is new context, user engagement, or something helpful and different to say.'
-      },
-      {
-        name: 'IGNORE',
-        description: 'Only choose this if {{agentName}} has reviewed all the available actions above and decided that none of them are appropriate. Use it when there’s nothing meaningful to say or do in the current situation.'
-      }
-    ]
-    
-    
-    const autoTemplate = `
-<note>
-This message is part of {{agentName}}'s regular behavior loop and is not triggered by any user message. {{agentName}} must check the recent Conversation Messages before responding. Only choose an action if it adds something new, useful, or appropriate based on the current situation.
-</note>
 
-<task>Decide the action, and emotional expression for {{agentName}} based on the conversation and the Hyperfy world state.</task>
-    
-<providers>
-{{providers}}
-
-# Conversation Messages:
-${recentMessages}
-
-# Available Actions:
-${HYPERFY_ACTIONS.map(
-  (a) => `- **${a.name}**: ${a.description}`
-).join('\n')}
-</providers>
-
-<keys>
-"thought" should be a short description of what the agent is thinking about and planning.
-"actions" should be a comma-separated list of the actions {{agentName}} plans to take based on the thought (if none, use IGNORE, if simply responding with text, use REPLY)
-"emote" should be exactly one emote {{agentName}} will play to express the intent or emotion behind the response (e.g. "crying", "wave"). Leave this blank if no emote fits.
-"text" should be the text of the next message for {{agentName}} which they will send to the conversation.
-</keys>
-
-<instructions>
-
-Respond using XML format like this:
-
-<response>
-    <thought>
-      Agent's thinking goes here
-    </thought>
-    <text>
-      The text of the next message for {{agentName}} which they will send to the conversation.
-    </text>
-    <actions>
-      Actions to take next, as comma separated list
-    </actions>
-    <emote>
-      Exactly one emote to express tone or reaction
-    </emote>
-</response>
-
-Your response must ONLY include the <response></response> XML block.
-</instructions>`;
-
-    const responsePrompt = composePromptFromState({ state, template: autoTemplate });
-
-    console.log('****** responsePrompt\n', responsePrompt);
+    const responsePrompt = composePromptFromState({ state, template: autoTemplate(recentMessages) });
 
     // decide
     const response = await this.runtime.useModel(ModelType.TEXT_LARGE, {
@@ -179,6 +111,8 @@ Your response must ONLY include the <response></response> XML block.
     });
 
     const parsedXml = parseKeyValueXml(response);
+
+    console.log('****** response\n', parsedXml)
 
     const responseMemory = {
       content: {
@@ -391,19 +325,7 @@ Your response must ONLY include the <response></response> XML block.
   
     const emotePickPrompt = composePromptFromState({
       state,
-      template: `
-  # Task: Determine which emote best fits {{agentName}}'s response, based on the character’s personality and intent.
-  
-  {{providers}}
-  
-  Guidelines:
-  - ONLY pick an emote if {{agentName}}’s response shows a clear emotional tone (e.g. joy, frustration, sarcasm) or strong contextual intent (e.g. celebration, mockery).
-  - DO NOT pick an emote for neutral, factual, or generic replies. If unsure, default to "null".
-  - Emotes should enhance the meaning or delivery of the message from {{agentName}}’s perspective, not just match keywords.
-  - Respond with exactly one emote name (e.g. "crying") if appropriate, or "null" if no emote fits.
-
-  Respond ONLY with one emote name or "null".
-  `.trim(),
+      template: emotePickTemplate,
     });
   
     const emoteResultRaw = await this.runtime.useModel(ModelType.TEXT_SMALL, {
