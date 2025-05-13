@@ -4,7 +4,9 @@ import { AgentControls } from "./controls";
 import { HyperfyService } from "./service";
 import { autoTemplate, emotePickTemplate } from "./templates";
 
-const TIME_INTERVAL = 30000;
+const TIME_INTERVAL_MIN = 5000; // 10 seconds
+const TIME_INTERVAL_MAX = 20000; // 30 seconds
+
 
 export class BehaviorManager {
   private isRunning: boolean = false;
@@ -55,7 +57,8 @@ export class BehaviorManager {
       }
 
       // Short delay between behaviors
-      await new Promise((resolve) => setTimeout(resolve, TIME_INTERVAL));
+      const delay = TIME_INTERVAL_MIN + Math.floor(Math.random() * (TIME_INTERVAL_MAX - TIME_INTERVAL_MIN));
+      await new Promise((resolve) => setTimeout(resolve, delay));
     }
   }
 

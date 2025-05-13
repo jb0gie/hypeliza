@@ -11,8 +11,8 @@ import { AgentControls } from '../controls'; // Still need type for casting
 import { HyperfyService } from '../service';
 
 // Restore constants for default values
-const RANDOM_WALK_DEFAULT_INTERVAL = 5000; // ms (5 seconds)
-const RANDOM_WALK_DEFAULT_MAX_DISTANCE = 7; // meters
+const RANDOM_WALK_DEFAULT_INTERVAL = 4000; // ms (4 seconds)
+const RANDOM_WALK_DEFAULT_MAX_DISTANCE = 30; // meters
 
 // State management is now in AgentControls
 
