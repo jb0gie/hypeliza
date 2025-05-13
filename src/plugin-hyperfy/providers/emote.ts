@@ -10,7 +10,7 @@ import { EMOTES_LIST } from '../constants'
  * @type {Provider}
  */
 export const hyperfyEmoteProvider: Provider = {
-    name: 'EMOTE_LIST',
+    name: 'HYPERFY_EMOTE_LIST',
     description: 'Lists all available emotes and their descriptions',
     get: async (_runtime: IAgentRuntime, _message: Memory) => {
       const emoteListText = EMOTES_LIST.map(

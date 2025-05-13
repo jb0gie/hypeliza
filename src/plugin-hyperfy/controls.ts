@@ -266,6 +266,10 @@ export class AgentControls extends System {
     return this._isNavigating;
   }
 
+  public getIsWalkingRandomly(): boolean {
+    return this._isRandomWalking;
+  }
+
   /** Helper to check if player and base position/quaternion are valid */
   private _validatePlayerState(caller: string): boolean {
        const player = this.world?.entities?.player;

@@ -30,7 +30,8 @@ export const hyperfyWalkRandomlyAction: Action = {
       _message: Memory,
       _state: State,
       options: { interval?: number, distance?: number, command?: 'start' | 'stop' }, // Reverted options
-      callback: HandlerCallback
+      callback: HandlerCallback,
+      responses,
     ) => {
       const service = runtime.getService<HyperfyService>(HyperfyService.serviceType);
       const world = service?.getWorld();
@@ -56,7 +57,7 @@ export const hyperfyWalkRandomlyAction: Action = {
 
       if (command === 'stop') {
           if (controls.getIsWalkingRandomly()) { // Use correct check
-               controls.stopRandomWalk("action commanded stop"); // Call correct stop method
+               controls.stopRandomWalk(); // Call correct stop method
                await callback({ text: "Stopped wandering.", actions: ['HYPERFY_WALK_RANDOMLY'], source: 'hyperfy', metadata: { status: 'stopped' } });
           } else {
                await callback({ text: "Was not wandering.", source: 'hyperfy' });
@@ -66,7 +67,7 @@ export const hyperfyWalkRandomlyAction: Action = {
           controls.startRandomWalk(intervalMs, maxDistance);
 
           await callback({
-             text: `Starting to wander randomly... (New target every ~${(intervalMs / 1000).toFixed(1)}s)`,
+             text: responses[0].content.text || `Starting to wander randomly... (New target every ~${(intervalMs / 1000).toFixed(1)}s)`,
              actions: ['HYPERFY_WALK_RANDOMLY'],
              source: 'hyperfy',
              metadata: { status: 'started', intervalMs: intervalMs, maxDistance: maxDistance }

@@ -17,11 +17,15 @@ import { AgentControls } from '../controls'; // Import AgentControls type
 
 // Define a simple template for entity extraction
 const entityExtractionTemplate = `
-# Task: Identify the target Hyperfy Entity ID based on the user message and the Hyperfy World State.
-# Do NOT use person IDs. Use only the Hyperfy Entity IDs listed in the Hyperfy World State.
+# Task: Identify the target Hyperfy Entity ID based on the recent Conversation Messages and the current Hyperfy World State.
+# This request may come from an automatic behavior loop — not necessarily a user message — so do NOT assume the last message contains a command or instruction.
+# You must examine the overall conversation context and determine whether {{agentName}} has a meaningful reason to go to a specific entity.
+# Use only the Hyperfy Entity IDs listed in the provided Hyperfy World State — not person IDs or names.
 
 {{providers}}
-# Instructions: Examine the user message: "{{messageText}}". Identify the Hyperfy Entity ID the user wants to navigate to from the list of entities provided in the context. Respond with only the Hyperfy Entity ID.
+
+# Instructions:
+You are {{agentName}}. Carefully review the recent messages and the Hyperfy world state. Decide if there is a valid reason — based on either recent user interaction or the general context — to navigate toward one of the listed entities.
 
 Response format should be a valid JSON block like this:
 \`\`\`json
@@ -66,7 +70,10 @@ export const hyperfyGotoEntityAction: Action = {
           logger.info('[GOTO Action] No entityId in options, attempting extraction from message...');
           try {
               // Compose state including entities provider
-              const extractionState = await runtime.composeState(message, ['ENTITIES', 'RECENT_MESSAGES']);
+              const extractionState = await runtime.composeState(message, [
+                'HYPERFY_WORLD_STATE', 
+                'RECENT_MESSAGES'
+              ]);
 
               const prompt = composePromptFromState({
                   state: extractionState,

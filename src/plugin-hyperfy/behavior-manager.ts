@@ -1,7 +1,8 @@
-import { ChannelType, Content, EventType, HandlerCallback, IAgentRuntime, Memory, ModelType, UUID, composePromptFromState, createUniqueUuid, logger } from "@elizaos/core";
-import { EMOTES_LIST } from "./constants";
+import { ChannelType, Content, EventType, HandlerCallback, IAgentRuntime, Memory, ModelType, UUID, composePromptFromState, createUniqueUuid, formatMessages, formatPosts, getEntityDetails, logger, parseKeyValueXml } from "@elizaos/core";
+import { EMOTES_LIST, HYPERFY_ACTIONS } from "./constants";
 import { AgentControls } from "./controls";
 import { HyperfyService } from "./service";
+import { autoTemplate, emotePickTemplate } from "./templates";
 
 const TIME_INTERVAL = 30000;
 
@@ -73,15 +74,95 @@ export class BehaviorManager {
       return;
     }
 
-    // TODO: Currently using hardcoded random walk.
-    // Need to pass providers prompt and ask the agent to decide behavior actions instead of defaulting to random walk.
-    // Also need to figure out how to get the current world image in the node environment
-    // so that the agent could decide its next action based on its surroundings.
-
     const service = this.getService();
-    const world = service?.getWorld();
-    const controls = world?.controls as AgentControls | undefined;
-    controls.startRandomWalk(3000, 50);
+    const _currentWorldId = service.currentWorldId;
+    
+    const elizaRoomId = createUniqueUuid(this.runtime, _currentWorldId || 'hyperfy-unknown-world')
+    const entityId = createUniqueUuid(this.runtime, this.runtime.agentId);
+
+    const newMessage: Memory = {
+      id:  createUniqueUuid(this.runtime, Date.now().toString()),
+      content: {
+        text: '',
+        type: 'text',
+      },
+      roomId: elizaRoomId,
+      worldId: _currentWorldId,
+      entityId,
+    };
+
+    const messageManager = service.getMessageManager();
+    const recentMessages = await messageManager.getRecentMessages(elizaRoomId)
+    
+    const state = await this.runtime.composeState(
+      newMessage, 
+      [
+        'CHARACTER',
+        'HYPERFY_WORLD_STATE',
+        'HYPERFY_EMOTE_LIST',
+      ]
+    );
+
+    const responsePrompt = composePromptFromState({ state, template: autoTemplate(recentMessages) });
+
+    // decide
+    const response = await this.runtime.useModel(ModelType.TEXT_LARGE, {
+      prompt: responsePrompt,
+    });
+
+    const parsedXml = parseKeyValueXml(response);
+
+    console.log('****** response\n', parsedXml)
+
+    const responseMemory = {
+      content: {
+        thought: parsedXml.thought,
+        text: parsedXml.text,
+        actions: parsedXml.actions,
+        providers: parsedXml.providers,
+        emote: parsedXml.emote,
+      },
+      entityId: createUniqueUuid(this.runtime, this.runtime.agentId),
+      roomId: elizaRoomId,
+    };
+
+    const callback: HandlerCallback = async (responseContent: Content): Promise<Memory[]> => {
+      console.info(`[Hyperfy Auto Callback] Received response: ${JSON.stringify(responseContent)}`)
+      const emote = responseContent.emote as string || "TALK";
+      const callbackMemory: Memory = {
+        id: createUniqueUuid(this.runtime, Date.now().toString()),
+        entityId: this.runtime.agentId,
+        agentId: this.runtime.agentId,
+        content: {
+          ...responseContent,
+          channelType: ChannelType.WORLD,
+          emote
+        },
+        roomId: elizaRoomId,
+        createdAt: Date.now(),
+      };
+        
+      await this.runtime.createMemory(callbackMemory, 'messages');
+
+      if (responseContent.text) {
+        const emoteManager = service.getEmoteManager();
+        emoteManager.playEmote(emote);
+        const messageManager = service.getMessageManager();
+        messageManager.sendMessage(responseContent.text)
+      }
+      return [];
+    };
+    
+    await this.runtime.processActions(
+      newMessage,
+      [responseMemory],
+      state,
+      callback
+    );
+
+    await this.runtime.evaluate(newMessage, state, true, callback, [
+      responseMemory,
+    ]);
   }
 
   async handleMessage(msg): Promise<void> {
@@ -168,7 +249,7 @@ export class BehaviorManager {
         const callback: HandlerCallback = async (responseContent: Content): Promise<Memory[]> => {
           console.info(`[Hyperfy Chat Callback] Received response: ${JSON.stringify(responseContent)}`)
           if (responseContent.text) {
-            console.info(`[Hyperfy Chat Response] ${responseContent.text}`)
+            console.log(`[Hyperfy Chat Response] ${responseContent}`)
             // Send response back to Hyperfy
             const emote = 
               await this.pickEmoteForResponse(memory) || "TALK";
@@ -177,7 +258,22 @@ export class BehaviorManager {
             emoteManager.playEmote(emote);
             const messageManager = service.getMessageManager();
             messageManager.sendMessage(responseContent.text)
-        }
+
+            const callbackMemory: Memory = {
+              id: createUniqueUuid(this.runtime, Date.now().toString()),
+              entityId: this.runtime.agentId,
+              agentId: this.runtime.agentId,
+              content: {
+                ...responseContent,
+                channelType: ChannelType.WORLD,
+                emote
+              },
+              roomId: elizaRoomId,
+              createdAt: Date.now(),
+            };
+            
+            await this.runtime.createMemory(callbackMemory, 'messages');
+          }
           return [];
         };
 
@@ -229,19 +325,7 @@ export class BehaviorManager {
   
     const emotePickPrompt = composePromptFromState({
       state,
-      template: `
-  # Task: Determine which emote best fits {{agentName}}'s response, based on the character’s personality and intent.
-  
-  {{providers}}
-  
-  Guidelines:
-  - ONLY pick an emote if {{agentName}}’s response shows a clear emotional tone (e.g. joy, frustration, sarcasm) or strong contextual intent (e.g. celebration, mockery).
-  - DO NOT pick an emote for neutral, factual, or generic replies. If unsure, default to "null".
-  - Emotes should enhance the meaning or delivery of the message from {{agentName}}’s perspective, not just match keywords.
-  - Respond with exactly one emote name (e.g. "crying") if appropriate, or "null" if no emote fits.
-
-  Respond ONLY with one emote name or "null".
-  `.trim(),
+      template: emotePickTemplate,
     });
   
     const emoteResultRaw = await this.runtime.useModel(ModelType.TEXT_SMALL, {
