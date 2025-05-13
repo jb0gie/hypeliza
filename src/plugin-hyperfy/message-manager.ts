@@ -1,4 +1,4 @@
-import { IAgentRuntime } from "@elizaos/core";
+import { IAgentRuntime, UUID, formatMessages, getEntityDetails } from "@elizaos/core";
 import { HyperfyService } from "./service";
 
 export class MessageManager {
@@ -39,5 +39,23 @@ export class MessageManager {
       console.error('Error sending Hyperfy message:', error.message, error.stack)
       throw error
     }
+  }
+
+  async getRecentMessages(roomId: UUID, count = 10) {
+    const [entitiesData, recentMessagesData] = await Promise.all([
+      getEntityDetails({ runtime: this.runtime, roomId }),
+      this.runtime.getMemories({
+        tableName: 'messages',
+        roomId,
+        count,
+        unique: false,
+      }),
+    ]);
+    const formattedRecentMessages = formatMessages({
+      messages: recentMessagesData,
+      entities: entitiesData,
+    });
+
+    return formattedRecentMessages;
   }
 }
