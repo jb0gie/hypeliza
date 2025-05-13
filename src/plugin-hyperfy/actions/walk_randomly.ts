@@ -56,7 +56,7 @@ export const hyperfyWalkRandomlyAction: Action = {
 
       if (command === 'stop') {
           if (controls.getIsWalkingRandomly()) { // Use correct check
-               controls.stopRandomWalk("action commanded stop"); // Call correct stop method
+               controls.stopRandomWalk(); // Call correct stop method
                await callback({ text: "Stopped wandering.", actions: ['HYPERFY_WALK_RANDOMLY'], source: 'hyperfy', metadata: { status: 'stopped' } });
           } else {
                await callback({ text: "Was not wandering.", source: 'hyperfy' });
