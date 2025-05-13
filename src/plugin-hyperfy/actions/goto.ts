@@ -51,7 +51,8 @@ export const hyperfyGotoEntityAction: Action = {
       message: Memory,
       _state: State,
       options: { entityId?: string },
-      callback: HandlerCallback
+      callback: HandlerCallback,
+      responses,
     ) => {
       const service = runtime.getService<HyperfyService>(HyperfyService.serviceType);
       const world = service?.getWorld(); // Use the getter
@@ -80,7 +81,7 @@ export const hyperfyGotoEntityAction: Action = {
                   template: entityExtractionTemplate,
               });
 
-              console.log("prompt", prompt);
+              // console.log("prompt", prompt);
 
               // Use OBJECT_SMALL model for structured response
               const response = await runtime.useModel(ModelType.OBJECT_SMALL, { prompt });
@@ -123,7 +124,7 @@ export const hyperfyGotoEntityAction: Action = {
 
         // Provide initial confirmation
         await callback({
-           text: `Navigating towards ${targetName || `entity ${targetEntityId}`}...`,
+           text: responses[0].content.text || `Navigating towards ${targetName || `entity ${targetEntityId}`}...`,
            actions: ['HYPERFY_GOTO_ENTITY'],
            source: 'hyperfy',
            metadata: {
