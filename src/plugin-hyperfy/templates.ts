@@ -24,7 +24,7 @@ ${HYPERFY_ACTIONS.map(
 "thought" should be a short description of what the agent is thinking about and planning.
 "actions" should be a comma-separated list of the actions {{agentName}} plans to take based on the thought (if none, use IGNORE, if simply responding with text, use REPLY)
 "emote" should be exactly one emote {{agentName}} will play to express the intent or emotion behind the response (e.g. "crying", "wave"). Leave this blank if no emote fits.
-"text" should be the text of the next message for {{agentName}} which they will send to the conversation.
+"text" should be included **only if** REPLY is selected as one of the actions. Leave this blank otherwise.
 </keys>
 
 <instructions>

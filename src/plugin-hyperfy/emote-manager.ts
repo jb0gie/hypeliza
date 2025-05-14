@@ -3,16 +3,18 @@ import path from 'path'
 import { EMOTES_LIST } from './constants.js'
 import { Emotes } from './hyperfy/src/core/extras/playerEmotes.js'
 import { hashFileBuffer } from './utils'
-import { logger } from '@elizaos/core'
+import { IAgentRuntime, Memory, ModelType, composePromptFromState, logger } from '@elizaos/core'
+import { HyperfyService } from './service.js'
+import { emotePickTemplate } from './templates.js'
 
 export class EmoteManager {
-  private world: any // replace `any` with more specific type if available
   private emoteHashMap: Map<string, string>
   private currentEmoteTimeout: NodeJS.Timeout | null
   private movementCheckInterval: NodeJS.Timeout | null = null;
+  private runtime: IAgentRuntime;
 
-  constructor(world) {
-    this.world = world
+  constructor(runtime) {
+    this.runtime = runtime;
     this.emoteHashMap = new Map()
     this.currentEmoteTimeout = null
   }
@@ -36,7 +38,9 @@ export class EmoteManager {
           type: emoteMimeType,
         });
 
-        const emoteUploadPromise = this.world.network.upload(emoteFile);
+        const service = this.getService();
+        const world = service.getWorld();
+        const emoteUploadPromise = world.network.upload(emoteFile);
         const emoteTimeout = new Promise((_resolve, reject) =>
           setTimeout(() => reject(new Error("Upload timed out")), 30000)
         );
@@ -59,13 +63,15 @@ export class EmoteManager {
   playEmote(name: string) {
     const fallback = (Emotes as Record<string, string>)[name];
     const hashName = this.emoteHashMap.get(name) || fallback;
+    const service = this.getService();
+    const world = service.getWorld();
 
     if (!hashName) {
       console.warn(`[Emote] Emote '${name}' not found.`);
       return;
     }
 
-    const agentPlayer = this.world?.entities?.player;
+    const agentPlayer = world?.entities?.player;
     if (!agentPlayer) {
       console.warn("[Emote] Player entity not found.");
       return;
@@ -114,5 +120,31 @@ export class EmoteManager {
       clearInterval(this.movementCheckInterval);
       this.movementCheckInterval = null;
     }
+  }
+
+  public async pickEmoteForResponse(
+    receiveMemory: Memory,
+  ): Promise<string | null> {
+    const state = await this.runtime.composeState(receiveMemory);
+  
+    const emotePickPrompt = composePromptFromState({
+      state,
+      template: emotePickTemplate,
+    });
+  
+    const emoteResultRaw = await this.runtime.useModel(ModelType.TEXT_SMALL, {
+      prompt: emotePickPrompt,
+    });
+  
+    const result = emoteResultRaw?.trim().toLowerCase().replace(/["']/g, '');
+  
+    if (!result || result === 'null') return null;
+  
+    const match = EMOTES_LIST.find((e) => e.name.toLowerCase() === result);
+    return match ? match.name : null;
+  }
+
+  private getService() {
+    return this.runtime.getService<HyperfyService>(HyperfyService.serviceType);
   }
 }
