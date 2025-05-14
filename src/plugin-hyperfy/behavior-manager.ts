@@ -1,8 +1,6 @@
-import { ChannelType, Content, EventType, HandlerCallback, IAgentRuntime, Memory, ModelType, UUID, composePromptFromState, createUniqueUuid, formatMessages, formatPosts, getEntityDetails, logger, parseKeyValueXml } from "@elizaos/core";
-import { EMOTES_LIST, HYPERFY_ACTIONS } from "./constants";
-import { AgentControls } from "./controls";
+import { ChannelType, Content, HandlerCallback, IAgentRuntime, Memory, ModelType, composePromptFromState, createUniqueUuid, logger, parseKeyValueXml } from "@elizaos/core";
 import { HyperfyService } from "./service";
-import { autoTemplate, emotePickTemplate } from "./templates";
+import { autoTemplate } from "./templates";
 import { msgGuard } from "./guards";
 
 const TIME_INTERVAL_MIN = 5000; // 10 seconds
@@ -131,7 +129,7 @@ export class BehaviorManager {
 
     const callback: HandlerCallback = async (responseContent: Content): Promise<Memory[]> => {
       console.info(`[Hyperfy Auto Callback] Received response: ${JSON.stringify(responseContent)}`)
-      const emote = responseContent.emote as string || "TALK";
+      const emote = responseContent.emote as string;
       const callbackMemory: Memory = {
         id: createUniqueUuid(this.runtime, Date.now().toString()),
         entityId: this.runtime.agentId,
@@ -147,12 +145,16 @@ export class BehaviorManager {
         
       await this.runtime.createMemory(callbackMemory, 'messages');
 
-      const emoteManager = service.getEmoteManager();
-      emoteManager.playEmote(emote);
+      if (!responseContent.actions.includes("IGNORE")) {
+        if (emote) {
+          const emoteManager = service.getEmoteManager();
+          emoteManager.playEmote(emote);
+        }
 
-      if (responseContent.text) {
-        const messageManager = service.getMessageManager();
-        messageManager.sendMessage(responseContent.text)
+        if (responseContent.text) {
+          const messageManager = service.getMessageManager();
+          messageManager.sendMessage(responseContent.text)
+        }
       }
       return [];
     };
