@@ -88,57 +88,57 @@ export class VoiceManager {
     }
 
     this.transcriptionTimeout = setTimeout(async () => {
-      this.processingVoice = true;
-      try {
-        await this.processTranscription(playerId);
+      await msgGuard.run(async () => {
+        this.processingVoice = true;
+        try {
+          await this.processTranscription(playerId);
 
-        // Clean all users' previous buffers
-        this.userStates.forEach((state, _) => {
-          state.buffers.length = 0;
-          state.totalLength = 0;
-          state.transcriptionText = '';
-        });
-      } finally {
-        this.processingVoice = false;
-      }
+          // Clean all users' previous buffers
+          this.userStates.forEach((state, _) => {
+            state.buffers.length = 0;
+            state.totalLength = 0;
+            state.transcriptionText = '';
+          });
+        } finally {
+          this.processingVoice = false;
+        }
+      })
     }, DEBOUNCE_TRANSCRIPTION_THRESHOLD) as unknown as NodeJS.Timeout;
   }
 
   private async processTranscription(
     playerId: UUID,
   ) {
-    await msgGuard.run(async () => {
-      const state = this.userStates.get(playerId);
-      if (!state || state.buffers.length === 0) return;
-      try {
-        const inputBuffer = Buffer.concat(state.buffers, state.totalLength);
+    const state = this.userStates.get(playerId);
+    if (!state || state.buffers.length === 0) return;
+    try {
+      const inputBuffer = Buffer.concat(state.buffers, state.totalLength);
 
-        state.buffers.length = 0; // Clear the buffers
-        state.totalLength = 0;
-        // Convert Opus to WAV
-        const wavHeader = getWavHeader(inputBuffer.length, 48000);
-        const wavBuffer = Buffer.concat([wavHeader, inputBuffer]);
-        logger.debug('Starting transcription...');
+      state.buffers.length = 0; // Clear the buffers
+      state.totalLength = 0;
+      // Convert Opus to WAV
+      const wavHeader = getWavHeader(inputBuffer.length, 48000);
+      const wavBuffer = Buffer.concat([wavHeader, inputBuffer]);
+      logger.debug('Starting transcription...');
 
-        const transcriptionText = await this.runtime.useModel(ModelType.TRANSCRIPTION, wavBuffer);
-        function isValidTranscription(text: string): boolean {
-          if (!text || text.includes('[BLANK_AUDIO]')) return false;
-          return true;
-        }
-
-        if (transcriptionText && isValidTranscription(transcriptionText)) {
-          state.transcriptionText += transcriptionText;
-        }
-
-        if (state.transcriptionText.length) {
-          const finalText = state.transcriptionText;
-          state.transcriptionText = '';
-          await this.handleMessage(finalText, playerId);
-        }
-      } catch (error) {
-        console.error(`Error transcribing audio for user ${playerId}:`, error);
+      const transcriptionText = await this.runtime.useModel(ModelType.TRANSCRIPTION, wavBuffer);
+      function isValidTranscription(text: string): boolean {
+        if (!text || text.includes('[BLANK_AUDIO]')) return false;
+        return true;
       }
-    })
+
+      if (transcriptionText && isValidTranscription(transcriptionText)) {
+        state.transcriptionText += transcriptionText;
+      }
+
+      if (state.transcriptionText.length) {
+        const finalText = state.transcriptionText;
+        state.transcriptionText = '';
+        await this.handleMessage(finalText, playerId);
+      }
+    } catch (error) {
+      console.error(`Error transcribing audio for user ${playerId}:`, error);
+    }
   }
 
   private async handleMessage(
@@ -152,10 +152,6 @@ export class VoiceManager {
       const service = this.getService();
       const world = service.getWorld();
 
-      const messageManager = service.getMessageManager();
-      const emoteManager = service.getEmoteManager();
-      
-        
       const playerInfo = world.entities.getPlayer(playerId);
       const userName = playerInfo.data.name;
       const name = userName;
@@ -219,8 +215,9 @@ export class VoiceManager {
             );
             if (responseStream) {
               const audioBuffer = await convertToAudioBuffer(responseStream);
-              messageManager.sendMessage(responseMemory.content.text);
-              emoteManager.playEmote('TALK');
+              const emoteManager = service.getEmoteManager();
+              const emote = await emoteManager.pickEmoteForResponse(memory) || "TALK";
+              emoteManager.playEmote(emote);
               await this.playAudio(audioBuffer);
             }
           }
