@@ -1090,4 +1090,8 @@ export class HyperfyService extends Service {
   getMessageManager() {
     return this.messageManager;
   }
+
+  getVoiceManager() {
+    return this.voiceManager;
+  }
 }
