@@ -3,8 +3,8 @@ import { HyperfyService } from "./service";
 import { autoTemplate } from "./templates";
 import { msgGuard } from "./guards";
 
-const TIME_INTERVAL_MIN = 5000; // 10 seconds
-const TIME_INTERVAL_MAX = 20000; // 30 seconds
+const TIME_INTERVAL_MIN = 15000; // 15 seconds
+const TIME_INTERVAL_MAX = 30000; // 30 seconds
 
 
 export class BehaviorManager {
