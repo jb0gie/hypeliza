@@ -1,55 +1,11 @@
-import { ChannelType, Content, EventType, HandlerCallback, IAgentRuntime, Memory, ModelType, UUID, composePromptFromState, createUniqueUuid, formatMessages, formatPosts, getEntityDetails, getWavHeader, logger, parseKeyValueXml } from "@elizaos/core";
-import { EMOTES_LIST, HYPERFY_ACTIONS } from "./constants";
-import { AgentControls } from "./controls";
+import { ChannelType, Content, HandlerCallback, IAgentRuntime, Memory, ModelType, UUID, createUniqueUuid, getWavHeader, logger } from "@elizaos/core";
 import { HyperfyService } from "./service";
-import { autoTemplate, emotePickTemplate } from "./templates";
-import { Readable } from 'node:stream';
+import { convertToAudioBuffer } from "./utils";
 
 type LiveKitAudioData = {
   participant: string;
   buffer: Buffer;
 };
-
-export async function convertToAudioBuffer(speechResponse: any): Promise<Buffer> {
-  if (Buffer.isBuffer(speechResponse)) {
-    return speechResponse;
-  }
-
-  if (typeof speechResponse?.getReader === 'function') {
-    // Handle Web ReadableStream
-    const reader = (speechResponse as ReadableStream<Uint8Array>).getReader();
-    const chunks: Uint8Array[] = [];
-
-    try {
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        if (value) chunks.push(value);
-      }
-      return Buffer.concat(chunks);
-    } finally {
-      reader.releaseLock();
-    }
-  }
-
-  if (
-    speechResponse instanceof Readable ||
-    (speechResponse &&
-      speechResponse.readable === true &&
-      typeof speechResponse.pipe === 'function' &&
-      typeof speechResponse.on === 'function')
-  ) {
-    // Handle Node Readable Stream
-    return new Promise<Buffer>((resolve, reject) => {
-      const chunks: Buffer[] = [];
-      speechResponse.on('data', (chunk) => chunks.push(Buffer.from(chunk)));
-      speechResponse.on('end', () => resolve(Buffer.concat(chunks)));
-      speechResponse.on('error', (err) => reject(err));
-    });
-  }
-
-  throw new Error('Unexpected response type from TEXT_TO_SPEECH model');
-}
 
 export class VoiceManager {
   private runtime: IAgentRuntime;
@@ -71,21 +27,6 @@ export class VoiceManager {
     const service = this.getService();
     const world = service.getWorld();
 
-
-    // const test = async() => {
-    //   const speechResponse = await this.runtime.useModel(ModelType.TEXT_TO_SPEECH, 'hi Im eliza! how are you doing today');
-    //   const audioBuffer = await convertToAudioBuffer(speechResponse);
-    //   console.log("audioBuffer", audioBuffer);
-    //   setTimeout(() => {
-    //     world.livekit.publishAudioStream(audioBuffer);
-    //   }, 7000)
-
-    //   setTimeout(() => {
-    //     world.livekit.publishAudioStream(audioBuffer);
-    //   }, 20000)
-      
-    // }
-    // test();
     world.livekit.on('audio', async (data: LiveKitAudioData) => {
       function isLoudEnough(pcmBuffer: Buffer, threshold = 1000): boolean {
         let sum = 0;
@@ -114,75 +55,7 @@ export class VoiceManager {
       if (isLoudEnough(pcmBuffer)) {
         this.handleUserBuffer(playerId, pcmBuffer)
       }
-      
-      
-
-      // console.log("debuggggggg", player)
-
-      // Step 4: Send to transcription
-      // const transcription = await this.runtime.useModel(
-      //   ModelType.TRANSCRIPTION,
-      //   wavBuffer
-      // );
-
-      // console.log("@@@@@@@@@@@@@@@@@@@@@@@@", transcription);
-
-      // try {
-      //   const transcription = await this.runtime.useModel(
-      //     ModelType.TRANSCRIPTION,
-      //     wavBuffer
-      //   );
-      //   console.log("@@@@@@@@@@@@@@@", transcription);
-      // } catch (err) {
-      //   console.error('Transcription failed:', err.message);
-      //   if (err.response) {
-      //     const text = await err.response.text?.();
-      //     console.error('Response Text:', text);
-      //     console.error('Status:', err.response.status);
-      //   }
-      // }
-
-      // const mergedBuffer = Buffer.concat(data); // data is your array of Buffers
-      // const arrayBuffer = mergedBuffer.buffer.slice(mergedBuffer.byteOffset, mergedBuffer.byteOffset + mergedBuffer.byteLength);
-
-      // Optional: wrap it in an ArrayBuffer-like object for logging
-      // const wrapped = {
-      //   [Symbol.toStringTag]: 'ArrayBuffer',
-      //   [Symbol.for('nodejs.util.inspect.custom')]: function () {
-      //     return `ArrayBuffer {\n  [Uint8Contents]: <${Array.from(new Uint8Array(arrayBuffer)).map(x => x.toString(16).padStart(2, '0')).join(' ')}>,\n  byteLength: ${arrayBuffer.byteLength}\n}`;
-      //   },
-      //   byteLength: arrayBuffer.byteLength,
-      //   buffer: arrayBuffer
-      // };
-
-      // console.log("##########################", arrayBuffer);
-      // console.log("##########################", data)
-      // const merged = Buffer.concat(data);
-      // const buffer = convertToAudioBuffer(data[0])
-      // console.log("Merged buffer length:", buffer);
-      // const trans = await this.runtime.useModel(ModelType.TRANSCRIPTION, Buffer.from(new Uint8Array(arrayBuffer)));
-      // console.log("@@@@@@@@@@@@@@@@@@@@@@@@", trans);
-
-      
     })
-
-    // const test = async() => {
-    //   const response = await fetch(
-    //     'https://upload.wikimedia.org/wikipedia/en/4/40/Chris_Benoit_Voice_Message.ogg'
-    //   );
-    //   console.log("debug 11111111", response)
-    //   const arrayBuffer = await response.arrayBuffer();
-    //   console.log("debug 2222222", arrayBuffer)
-    //   const transcription = await this.runtime.useModel(
-    //     ModelType.TRANSCRIPTION,
-    //     Buffer.from(new Uint8Array(arrayBuffer))
-    //   );
-    //   console.log('generated with test_transcription:', transcription);
-    // }
-
-    // test();
-
-    
   }
 
   async handleUserBuffer(playerId, buffer) {
