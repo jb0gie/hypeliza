@@ -1,6 +1,7 @@
 import { ChannelType, Content, HandlerCallback, IAgentRuntime, Memory, ModelType, UUID, createUniqueUuid, getWavHeader, logger } from "@elizaos/core";
 import { HyperfyService } from "./service";
 import { convertToAudioBuffer } from "./utils";
+import { msgGuard } from "./guards";
 
 type LiveKitAudioData = {
   participant: string;
@@ -106,36 +107,38 @@ export class VoiceManager {
   private async processTranscription(
     playerId: UUID,
   ) {
-    const state = this.userStates.get(playerId);
-    if (!state || state.buffers.length === 0) return;
-    try {
-      const inputBuffer = Buffer.concat(state.buffers, state.totalLength);
+    await msgGuard.run(async () => {
+      const state = this.userStates.get(playerId);
+      if (!state || state.buffers.length === 0) return;
+      try {
+        const inputBuffer = Buffer.concat(state.buffers, state.totalLength);
 
-      state.buffers.length = 0; // Clear the buffers
-      state.totalLength = 0;
-      // Convert Opus to WAV
-      const wavHeader = getWavHeader(inputBuffer.length, 48000);
-      const wavBuffer = Buffer.concat([wavHeader, inputBuffer]);
-      logger.debug('Starting transcription...');
+        state.buffers.length = 0; // Clear the buffers
+        state.totalLength = 0;
+        // Convert Opus to WAV
+        const wavHeader = getWavHeader(inputBuffer.length, 48000);
+        const wavBuffer = Buffer.concat([wavHeader, inputBuffer]);
+        logger.debug('Starting transcription...');
 
-      const transcriptionText = await this.runtime.useModel(ModelType.TRANSCRIPTION, wavBuffer);
-      function isValidTranscription(text: string): boolean {
-        if (!text || text.includes('[BLANK_AUDIO]')) return false;
-        return true;
+        const transcriptionText = await this.runtime.useModel(ModelType.TRANSCRIPTION, wavBuffer);
+        function isValidTranscription(text: string): boolean {
+          if (!text || text.includes('[BLANK_AUDIO]')) return false;
+          return true;
+        }
+
+        if (transcriptionText && isValidTranscription(transcriptionText)) {
+          state.transcriptionText += transcriptionText;
+        }
+
+        if (state.transcriptionText.length) {
+          const finalText = state.transcriptionText;
+          state.transcriptionText = '';
+          await this.handleMessage(finalText, playerId);
+        }
+      } catch (error) {
+        console.error(`Error transcribing audio for user ${playerId}:`, error);
       }
-
-      if (transcriptionText && isValidTranscription(transcriptionText)) {
-        state.transcriptionText += transcriptionText;
-      }
-
-      if (state.transcriptionText.length) {
-        const finalText = state.transcriptionText;
-        state.transcriptionText = '';
-        await this.handleMessage(finalText, playerId);
-      }
-    } catch (error) {
-      console.error(`Error transcribing audio for user ${playerId}:`, error);
-    }
+    })
   }
 
   private async handleMessage(
@@ -151,6 +154,7 @@ export class VoiceManager {
 
       const messageManager = service.getMessageManager();
       const emoteManager = service.getEmoteManager();
+      
         
       const playerInfo = world.entities.getPlayer(playerId);
       const userName = playerInfo.data.name;

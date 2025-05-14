@@ -3,6 +3,7 @@ import { EMOTES_LIST, HYPERFY_ACTIONS } from "./constants";
 import { AgentControls } from "./controls";
 import { HyperfyService } from "./service";
 import { autoTemplate, emotePickTemplate } from "./templates";
+import { msgGuard } from "./guards";
 
 const TIME_INTERVAL_MIN = 5000; // 10 seconds
 const TIME_INTERVAL_MAX = 20000; // 30 seconds
@@ -11,7 +12,6 @@ const TIME_INTERVAL_MAX = 20000; // 30 seconds
 export class BehaviorManager {
   private isRunning: boolean = false;
   private runtime: IAgentRuntime;
-  private msgGuard = new MessageActivityGuard();
   
   constructor(runtime: IAgentRuntime) {
     this.runtime = runtime;
@@ -72,7 +72,7 @@ export class BehaviorManager {
   private async executeBehavior(): Promise<void> {
     // TODO: There may be slow post-processing in the bootstrap plugin's message handler.
     // Investigate long tail after message handling, especially in emitEvent or runtime methods.
-    if (this.msgGuard.isActive()) {
+    if (msgGuard.isActive()) {
       logger.info("[BehaviorManager] Skipping behavior — message activity in progress");
       return;
     }
@@ -170,7 +170,7 @@ export class BehaviorManager {
 
   async handleMessage(msg): Promise<void> {
     // maybe a thinking emote here?
-    await this.msgGuard.run(async () => {
+    await msgGuard.run(async () => {
       const service = this.getService();
       const world = service.getWorld();
       const agentPlayerId = world.entities.player.data.id // Get agent's ID
@@ -341,27 +341,5 @@ export class BehaviorManager {
   
     const match = EMOTES_LIST.find((e) => e.name.toLowerCase() === result);
     return match ? match.name : null;
-  }
-}
-
-
-/**
- * Guards any async task and tracks if something is running.
- * Used to prevent behavior execution during active message processing.
- */
-class MessageActivityGuard {
-  private count = 0;
-
-  isActive(): boolean {
-    return this.count > 0;
-  }
-
-  async run<T>(fn: () => Promise<T>): Promise<T> {
-    this.count++;
-    try {
-      return await fn();
-    } finally {
-      this.count--;
-    }
   }
 }
