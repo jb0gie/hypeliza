@@ -49,21 +49,6 @@ Respond using XML format like this:
 Your response must ONLY include the <response></response> XML block.
 </instructions>`;
 
-
-export const emotePickTemplate = `
-# Task: Determine which emote best fits {{agentName}}'s response, based on the character’s personality and intent.
-
-{{providers}}
-
-Guidelines:
-- ONLY pick an emote if {{agentName}}’s response shows a clear emotional tone (e.g. joy, frustration, sarcasm) or strong contextual intent (e.g. celebration, mockery).
-- DO NOT pick an emote for neutral, factual, or generic replies. If unsure, default to "null".
-- Emotes should enhance the meaning or delivery of the message from {{agentName}}’s perspective, not just match keywords.
-- Respond with exactly one emote name (e.g. "crying") if appropriate, or "null" if no emote fits.
-
-Respond ONLY with one emote name or "null".
-`.trim()
-
 export const messageHandlerTemplate = `<task>Generate dialog and actions for the character {{agentName}}.</task>  
 
 <providers>
