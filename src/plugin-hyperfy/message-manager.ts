@@ -98,8 +98,7 @@ export class MessageManager {
             const emoteManager = service.getEmoteManager();
             const emote = await emoteManager.pickEmoteForResponse(memory) || "TALK";
             emoteManager.playEmote(emote);
-            const messageManager = service.getMessageManager();
-            messageManager.sendMessage(responseContent.text)
+            this.sendMessage(responseContent.text);
 
             const callbackMemory: Memory = {
               id: createUniqueUuid(this.runtime, Date.now().toString()),
