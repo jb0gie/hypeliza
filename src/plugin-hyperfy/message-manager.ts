@@ -1,12 +1,17 @@
 import { ChannelType, Content, EventType, HandlerCallback, IAgentRuntime, Memory, UUID, createUniqueUuid, formatMessages, getEntityDetails } from "@elizaos/core";
 import { HyperfyService } from "./service";
 import { msgGuard } from "./guards";
+import { messageHandlerTemplate } from "./templates";
 
 export class MessageManager {
   private runtime: IAgentRuntime;
   
   constructor(runtime: IAgentRuntime) {
     this.runtime = runtime;
+    if (!this.runtime.character.templates) {
+      this.runtime.character.templates = {};
+    }
+    this.runtime.character.templates.messageHandlerTemplate = messageHandlerTemplate;
   }
 
   async handleMessage(msg): Promise<void> {
@@ -94,9 +99,9 @@ export class MessageManager {
           console.info(`[Hyperfy Chat Callback] Received response: ${JSON.stringify(responseContent)}`)
           if (responseContent.text) {
             console.log(`[Hyperfy Chat Response] ${responseContent}`)
+            const emote = responseContent.emote as string;
             // Send response back to Hyperfy
             const emoteManager = service.getEmoteManager();
-            const emote = await emoteManager.pickEmoteForResponse(memory);
             if (emote) {
               emoteManager.playEmote(emote);
             }
