@@ -31,7 +31,6 @@ export const hyperfyWalkRandomlyAction: Action = {
       _state: State,
       options: { interval?: number, distance?: number, command?: 'start' | 'stop' }, // Reverted options
       callback: HandlerCallback,
-      responses,
     ) => {
       const service = runtime.getService<HyperfyService>(HyperfyService.serviceType);
       const world = service?.getWorld();
@@ -67,7 +66,7 @@ export const hyperfyWalkRandomlyAction: Action = {
           controls.startRandomWalk(intervalMs, maxDistance);
 
           await callback({
-             text: responses[0].content.text || `Starting to wander randomly... (New target every ~${(intervalMs / 1000).toFixed(1)}s)`,
+             text: `Starting to wander randomly... (New target every ~${(intervalMs / 1000).toFixed(1)}s)`,
              actions: ['HYPERFY_WALK_RANDOMLY'],
              source: 'hyperfy',
              metadata: { status: 'started', intervalMs: intervalMs, maxDistance: maxDistance }

@@ -52,7 +52,6 @@ export const hyperfyGotoEntityAction: Action = {
       _state: State,
       options: { entityId?: string },
       callback: HandlerCallback,
-      responses,
     ) => {
       const service = runtime.getService<HyperfyService>(HyperfyService.serviceType);
       const world = service?.getWorld(); // Use the getter
@@ -124,7 +123,7 @@ export const hyperfyGotoEntityAction: Action = {
 
         // Provide initial confirmation
         await callback({
-           text: responses[0].content.text || `Navigating towards ${targetName || `entity ${targetEntityId}`}...`,
+           text: `Navigating towards ${targetName || `entity ${targetEntityId}`}...`,
            actions: ['HYPERFY_GOTO_ENTITY'],
            source: 'hyperfy',
            metadata: {
