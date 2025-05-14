@@ -193,6 +193,7 @@ export class VoiceManager {
       };
 
       const callback: HandlerCallback = async (content: Content, _files: any[] = []) => {
+        console.info(`[Hyperfy Voice Chat Callback] Received response: ${JSON.stringify(content)}`)
         try {
           const responseMemory: Memory = {
             id: createUniqueUuid(this.runtime, `${memory.id}-voice-response-${Date.now()}`),
@@ -217,7 +218,7 @@ export class VoiceManager {
             if (responseStream) {
               const audioBuffer = await convertToAudioBuffer(responseStream);
               const emoteManager = service.getEmoteManager();
-              const emote = await emoteManager.pickEmoteForResponse(memory) || "TALK";
+              const emote = content.emote as string || "TALK";
               emoteManager.playEmote(emote);
               await this.playAudio(audioBuffer);
             }

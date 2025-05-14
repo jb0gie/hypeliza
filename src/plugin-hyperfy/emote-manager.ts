@@ -3,9 +3,8 @@ import path from 'path'
 import { EMOTES_LIST } from './constants.js'
 import { Emotes } from './hyperfy/src/core/extras/playerEmotes.js'
 import { hashFileBuffer } from './utils'
-import { IAgentRuntime, Memory, ModelType, composePromptFromState, logger } from '@elizaos/core'
+import { IAgentRuntime, logger } from '@elizaos/core'
 import { HyperfyService } from './service.js'
-import { emotePickTemplate } from './templates.js'
 
 export class EmoteManager {
   private emoteHashMap: Map<string, string>
@@ -120,28 +119,6 @@ export class EmoteManager {
       clearInterval(this.movementCheckInterval);
       this.movementCheckInterval = null;
     }
-  }
-
-  public async pickEmoteForResponse(
-    receiveMemory: Memory,
-  ): Promise<string | null> {
-    const state = await this.runtime.composeState(receiveMemory);
-  
-    const emotePickPrompt = composePromptFromState({
-      state,
-      template: emotePickTemplate,
-    });
-  
-    const emoteResultRaw = await this.runtime.useModel(ModelType.TEXT_SMALL, {
-      prompt: emotePickPrompt,
-    });
-  
-    const result = emoteResultRaw?.trim().toLowerCase().replace(/["']/g, '');
-  
-    if (!result || result === 'null') return null;
-  
-    const match = EMOTES_LIST.find((e) => e.name.toLowerCase() === result);
-    return match ? match.name : null;
   }
 
   private getService() {
