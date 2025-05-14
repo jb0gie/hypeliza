@@ -28,7 +28,7 @@ import { loadPhysX } from './physx/loadPhysX.js'
 import { BehaviorManager } from "./behavior-manager.js"
 import { EmoteManager } from './emote-manager.js'
 import { MessageManager } from './message-manager.js'
-import { VoiceManager, convertToAudioBuffer } from './voice-manager.js'
+import { VoiceManager } from './voice-manager.js'
 import { hashFileBuffer } from './utils'
 
 const LOCAL_AVATAR_PATH = process.env.HYPERFY_AGENT_AVATAR_PATH || './avatar.vrm'
@@ -1010,7 +1010,7 @@ export class HyperfyService extends Service {
 
         newMessagesFound.forEach(async (msg: any) => {
           // Delegate to BehaviorManager to decide how the agent should respond (e.g. play emote, send message).
-          await this.behaviorManager.handleMessage(msg);
+          await this.messageManager.handleMessage(msg);
         })
       }
     })
