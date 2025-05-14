@@ -22,11 +22,13 @@ import * as THREE from 'three'
 import { createNodeClientWorld } from './hyperfy/src/core/createNodeClientWorld.js'
 import { AgentControls } from './controls'
 import { AgentLoader } from './loader'
+import { AgentLiveKit } from './liveKit.js'
 import { Vector3Enhanced } from './hyperfy/src/core/extras/Vector3Enhanced.js'
 import { loadPhysX } from './physx/loadPhysX.js'
 import { BehaviorManager } from "./behavior-manager.js"
 import { EmoteManager } from './emote-manager.js'
 import { MessageManager } from './message-manager.js'
+import { VoiceManager, convertToAudioBuffer } from './voice-manager.js'
 import { hashFileBuffer } from './utils'
 
 const LOCAL_AVATAR_PATH = process.env.HYPERFY_AGENT_AVATAR_PATH || './avatar.vrm'
@@ -69,6 +71,7 @@ export class HyperfyService extends Service {
   private behaviorManager: BehaviorManager;
   private emoteManager: EmoteManager;
   private messageManager: MessageManager;
+  private voiceManager: VoiceManager;
 
   public get currentWorldId(): UUID | null {
     return this._currentWorldId
@@ -174,6 +177,10 @@ export class HyperfyService extends Service {
 
       globalThis.self = globalThis
 
+      const livekit = new AgentLiveKit(world);
+      ;(world as any).livekit = livekit
+      world.systems.push(livekit);
+      
       this.controls = new AgentControls(world)
       ;(world as any).controls = this.controls
       world.systems.push(this.controls)
@@ -267,11 +274,12 @@ export class HyperfyService extends Service {
 
       this.isConnectedState = true
 
-      this.emoteManager = new EmoteManager(world);
+      this.emoteManager = new EmoteManager(this.runtime);
       this.messageManager = new MessageManager(this.runtime);
+      this.voiceManager = new VoiceManager(this.runtime);
 
       this.behaviorManager = new BehaviorManager(this.runtime);
-      this.behaviorManager.start();
+      // this.behaviorManager.start();
       
       this.startSimulation()
       this.startEntityUpdates()

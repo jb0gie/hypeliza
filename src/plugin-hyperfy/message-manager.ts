@@ -8,7 +8,7 @@ export class MessageManager {
     this.runtime = runtime;
   }
 
-  async sendMessage(text: string): Promise<void> {
+  async sendMessage(text: string, playerId?: UUID): Promise<void> {
     const service = this.runtime.getService<HyperfyService>(HyperfyService.serviceType);
     const world = service.getWorld();
     if (!service.isConnected() || !world?.chat || !world?.entities?.player) {
@@ -17,7 +17,7 @@ export class MessageManager {
     }
 
     try {
-      const agentPlayerId = world.entities.player.data.id
+      const agentPlayerId = playerId || world.entities.player.data.id
       const agentPlayerName = service.getEntityName(agentPlayerId) || world.entities.player.data?.name || 'Hyperliza'
 
       console.info(`HyperfyService sending message: "${text}" as ${agentPlayerName} (${agentPlayerId})`)
