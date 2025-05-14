@@ -1009,7 +1009,6 @@ export class HyperfyService extends Service {
         console.info(`[Chat] Found ${newMessagesFound.length} new messages to process.`)
 
         newMessagesFound.forEach(async (msg: any) => {
-          // Delegate to BehaviorManager to decide how the agent should respond (e.g. play emote, send message).
           await this.messageManager.handleMessage(msg);
         })
       }
