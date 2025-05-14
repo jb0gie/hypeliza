@@ -145,7 +145,7 @@ export class BehaviorManager {
         
       await this.runtime.createMemory(callbackMemory, 'messages');
 
-      if (!responseContent.actions.includes("IGNORE")) {
+      if (responseContent.actions && !responseContent.actions.includes("IGNORE")) {
         if (emote) {
           const emoteManager = service.getEmoteManager();
           emoteManager.playEmote(emote);

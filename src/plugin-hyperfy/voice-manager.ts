@@ -122,6 +122,8 @@ export class VoiceManager {
       logger.debug('Starting transcription...');
 
       const transcriptionText = await this.runtime.useModel(ModelType.TRANSCRIPTION, wavBuffer);
+
+      console.log("[VOICE MANAGER] Transcrtion: ", transcriptionText)
       function isValidTranscription(text: string): boolean {
         if (!text || text.includes('[BLANK_AUDIO]')) return false;
         return true;
@@ -208,7 +210,6 @@ export class VoiceManager {
           };
 
           if (responseMemory.content.text?.trim()) {
-            await this.runtime.createMemory(responseMemory, 'messages');
             const responseStream = await this.runtime.useModel(
               ModelType.TEXT_TO_SPEECH,
               content.text
@@ -220,6 +221,8 @@ export class VoiceManager {
               emoteManager.playEmote(emote);
               await this.playAudio(audioBuffer);
             }
+
+            await this.runtime.createMemory(responseMemory, 'messages');
           }
 
           return [responseMemory];
