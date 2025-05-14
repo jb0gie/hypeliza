@@ -10,13 +10,7 @@ import {
   TrackKind,
   AudioStream
 } from '@livekit/rtc-node';
-import { config } from 'dotenv';
-import { AccessToken } from 'livekit-server-sdk';
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
-import * as fs from 'fs';
 import { System } from './hyperfy/src/core/systems/System';
-import { Readable } from 'stream';
 import { spawn } from 'node:child_process';
 
 export interface LiveKitInitOptions {
@@ -26,6 +20,8 @@ export interface LiveKitInitOptions {
 
 export class AgentLiveKit extends System {
   private room: Room | null = null;
+  private audioSource: AudioSource | null = null;
+  private localTrack: LocalAudioTrack | null = null;
 
   constructor(world: any) {
     super(world);
@@ -100,34 +96,30 @@ export class AgentLiveKit extends System {
     const numChannels = 1;
     const frameDurationMs = 100;
     const samplesPerFrame = (sampleRate * frameDurationMs) / 1000;
-
+  
     const int16 = await this.convertToPcm(audioBuffer, sampleRate);
     if (!int16 || int16.length === 0) {
       console.warn('No PCM data decoded');
       return;
     }
-
-    const source = new AudioSource(sampleRate, numChannels);
-    const track = LocalAudioTrack.createAudioTrack('agent-voice', source);
-
-    const options = new TrackPublishOptions();
-    options.source = TrackSource.SOURCE_MICROPHONE;
-
-    await this.room?.localParticipant.publishTrack(track, options);
-
-    await new Promise((r) => setTimeout(r, 100));
-
+  
+    if (!this.audioSource) {
+      this.audioSource = new AudioSource(sampleRate, numChannels);
+      this.localTrack = LocalAudioTrack.createAudioTrack('agent-voice', this.audioSource);
+  
+      const options = new TrackPublishOptions();
+      options.source = TrackSource.SOURCE_MICROPHONE;
+      await this.room?.localParticipant.publishTrack(this.localTrack, options);
+    }
+  
     const silence = new Int16Array(samplesPerFrame);
-    await source.captureFrame(new AudioFrame(silence, sampleRate, numChannels, silence.length));
-
+    await this.audioSource.captureFrame(new AudioFrame(silence, sampleRate, numChannels, silence.length));
+  
     for (let i = 0; i < int16.length; i += samplesPerFrame) {
       const slice = int16.slice(i, i + samplesPerFrame);
       const frame = new AudioFrame(slice, sampleRate, numChannels, slice.length);
-      await source.captureFrame(frame);
+      await this.audioSource.captureFrame(frame);
     }
-
-    await source.waitForPlayout();
-    await source.close();
   }
 
   private async convertToPcm(buffer: Buffer, sampleRate = 48000): Promise<Int16Array> {
