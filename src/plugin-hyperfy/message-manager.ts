@@ -96,8 +96,10 @@ export class MessageManager {
             console.log(`[Hyperfy Chat Response] ${responseContent}`)
             // Send response back to Hyperfy
             const emoteManager = service.getEmoteManager();
-            const emote = await emoteManager.pickEmoteForResponse(memory) || "TALK";
-            emoteManager.playEmote(emote);
+            const emote = await emoteManager.pickEmoteForResponse(memory);
+            if (emote) {
+              emoteManager.playEmote(emote);
+            }
             this.sendMessage(responseContent.text);
 
             const callbackMemory: Memory = {
