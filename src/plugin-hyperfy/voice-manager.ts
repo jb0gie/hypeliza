@@ -194,8 +194,6 @@ export class VoiceManager {
         createdAt: Date.now(),
       };
 
-      messageManager.sendMessage(message, playerId);
-
       const callback: HandlerCallback = async (content: Content, _files: any[] = []) => {
         try {
           const responseMemory: Memory = {
