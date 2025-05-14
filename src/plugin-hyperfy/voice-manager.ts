@@ -217,9 +217,8 @@ export class VoiceManager {
               const audioBuffer = await convertToAudioBuffer(responseStream);
               const emoteManager = service.getEmoteManager();
               const emote = await emoteManager.pickEmoteForResponse(memory) || "TALK";
-             
-              await this.playAudio(audioBuffer); 
               emoteManager.playEmote(emote);
+              await this.playAudio(audioBuffer);
             }
           }
 
