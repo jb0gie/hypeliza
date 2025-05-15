@@ -147,21 +147,26 @@ export class AgentLoader extends System {
           return this.parseGLB(type, key, arrayBuffer, resolved);
         }
 
-        // HACK: Only allow loading scripts that create a collider.
-        // TODO: Replace with a more robust script validation system.
+        // TEMP WORKAROUND: Only load scripts that do not create video, UI, or image elements.
+        // TODO: Replace this with a proper script validation system.
         if (type === 'script') {
           const code = await response.text();
-          
-          const hasCollider = /app\.create\(['"]collider['"]\)/.test(code);
-          if (!hasCollider) {
-            console.warn("Skipping script because it does not create a collider.");
+
+          const forbiddenTypes = ['video', 'ui', 'image'];
+          const isForbidden = forbiddenTypes.some(type =>
+            new RegExp(`app\\.create\\s*\\(\\s*['"]${type}['"]\\s*(,|\\))`).test(code)
+          );
+
+          if (isForbidden) {
+            console.warn(`[ScriptLoader] Skipping script: disallowed type used\n`);
             return;
           }
-          
+
           const script = this.world.scripts.evaluate(code);
           this.results.set(key, script);
           return script;
         }
+
         
         console.warn(`[AgentLoader] Unsupported type in load(): ${type}`);
         return null;
