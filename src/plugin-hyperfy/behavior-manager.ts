@@ -1,7 +1,7 @@
 import { ChannelType, Content, HandlerCallback, IAgentRuntime, Memory, ModelType, composePromptFromState, createUniqueUuid, logger, parseKeyValueXml } from "@elizaos/core";
 import { HyperfyService } from "./service";
 import { autoTemplate } from "./templates";
-import { msgGuard } from "./guards";
+import { agentActivityLock } from "./guards";
 
 const TIME_INTERVAL_MIN = 15000; // 15 seconds
 const TIME_INTERVAL_MAX = 30000; // 30 seconds
@@ -70,7 +70,7 @@ export class BehaviorManager {
   private async executeBehavior(): Promise<void> {
     // TODO: There may be slow post-processing in the bootstrap plugin's message handler.
     // Investigate long tail after message handling, especially in emitEvent or runtime methods.
-    if (msgGuard.isActive()) {
+    if (agentActivityLock.isActive()) {
       logger.info("[BehaviorManager] Skipping behavior — message activity in progress");
       return;
     }

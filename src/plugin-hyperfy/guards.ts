@@ -4,23 +4,32 @@
  * Used to prevent behavior execution during active message processing.
  */
 
-export class MessageActivityGuard {
+export class AgentActivityLock {
     private count = 0;
-
+  
     isActive(): boolean {
-        return this.count > 0;
+      return this.count > 0;
     }
-
+  
+    enter() {
+      this.count++;
+    }
+  
+    exit() {
+      this.count = Math.max(0, this.count - 1);
+    }
+  
     async run<T>(fn: () => Promise<T>): Promise<T> {
-        this.count++;
-        try {
+      this.enter();
+      try {
         return await fn();
-        } finally {
-        this.count--;
-        }
+      } finally {
+        this.exit();
+      }
     }
-}
+  }
+  
 
 
-export const msgGuard = new MessageActivityGuard();
+export const agentActivityLock = new AgentActivityLock();
   
