@@ -43,7 +43,7 @@ export const hyperfyProvider: Provider = {
         const entities = world?.entities?.items;
         // Iterate over the entities Map from the service state
         for (const [id, entity] of entities.entries()) {
-             const position = entity?.base?.position;
+             const position = entity?.base?.position || entity?.root?.position;
              const name = entity?.data?.name;
              const type = entity?.data?.type;
              
@@ -64,6 +64,8 @@ export const hyperfyProvider: Provider = {
   
         const formattedText = `\n\n# Hyperfy World State\nStatus: ${state.status}\n${agentText}\n${entityText} \n\n`;
   
+        console.log("formateettext", formattedText)
+
         // Prepare data for values and raw data
         // Convert map to a more serializable object for the data field
         const entitiesData = Object.fromEntries(state.entities);
