@@ -121,17 +121,17 @@ export const hyperfyGotoEntityAction: Action = {
         logger.info(`HYPERFY_GOTO_ENTITY: Requesting navigation via controls to entity ${targetName || targetEntityId} at (${targetPosition.x.toFixed(2)}, ${targetPosition.z.toFixed(2)})`);
         controls.goto(targetPosition.x, targetPosition.z); // Use controls method
 
-        // Provide initial confirmation
-        await callback({
-           text: `Navigating towards ${targetName || `entity ${targetEntityId}`}...`,
-           actions: ['HYPERFY_GOTO_ENTITY'],
-           source: 'hyperfy',
-           metadata: {
-               targetEntityId: targetEntityId,
-               targetPosition: targetPosition.toArray(),
-               status: 'navigation_started'
-           }
-        });
+        // // Provide initial confirmation
+        // await callback({
+        //    text: `Navigating towards ${targetName || `entity ${targetEntityId}`}...`,
+        //    actions: ['HYPERFY_GOTO_ENTITY'],
+        //    source: 'hyperfy',
+        //    metadata: {
+        //        targetEntityId: targetEntityId,
+        //        targetPosition: targetPosition.toArray(),
+        //        status: 'navigation_started'
+        //    }
+        // });
 
       } catch (error: any) {
         logger.error(`Error during HYPERFY_GOTO_ENTITY for ID ${targetEntityId}:`, error);

@@ -88,4 +88,9 @@ Respond using XML format like this:
 </response>
 
 Your response must ONLY include the <response></response> XML block.
-</output>`;
+</output>
+
+<note>
+If your planned actions include "REPLY", make sure "REPLY" is listed as the **first** action in the "actions" key.
+</note>
+`;
