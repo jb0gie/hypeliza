@@ -233,11 +233,15 @@ export class VoiceManager {
         }
       };
 
+      msgGuard.enter();
       // Emit voice-specific events
       this.runtime.emitEvent(['VOICE_MESSAGE_RECEIVED'], {
         runtime: this.runtime,
         message: memory,
         callback,
+        onComplete: () => {
+          msgGuard.exit();
+        },
       });
     } catch (error) {
       console.error('Error processing voice message:', error);

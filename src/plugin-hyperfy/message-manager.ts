@@ -151,12 +151,14 @@ export class MessageManager {
 
         // Emit the MESSAGE_RECEIVED event to trigger the message handler
         console.info(`[Hyperfy Chat] Emitting MESSAGE_RECEIVED event for message: ${messageId}`)
+        msgGuard.enter();
         await this.runtime.emitEvent(EventType.MESSAGE_RECEIVED, {
             runtime: this.runtime,
             message: memory,
             callback: callback,
             source: 'hyperfy',
             onComplete: () => {
+              msgGuard.exit();
             }
           },
         )
