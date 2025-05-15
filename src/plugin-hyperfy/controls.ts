@@ -76,7 +76,7 @@ export class AgentControls extends System {
 
     const commonKeys = [
       'keyW', 'keyA', 'keyS', 'keyD', 'space', 'shiftLeft', 'shiftRight',
-      'controlLeft', 'keyC', 'keyF', 'keyE', 'arrowUp', 'arrowDown',
+      'controlLeft', 'keyC', 'keyF', 'keyE', 'keyX', 'arrowUp', 'arrowDown',
       'arrowLeft', 'arrowRight', 'touchA', 'touchB', 'xrLeftStick',
       'xrRightStick', 'xrLeftBtn1', 'xrLeftBtn2', 'xrRightBtn1', 'xrRightBtn2',
     ];
