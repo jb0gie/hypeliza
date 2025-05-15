@@ -5,6 +5,8 @@ import { createNode } from "./hyperfy/src/core/extras/createNode.js";
 import { GLTFLoader } from "./hyperfy/src/core/libs/gltfloader/GLTFLoader.js";
 import { glbToNodes } from "./hyperfy/src/core/extras/glbToNodes.js";
 import { createEmoteFactory } from "./hyperfy/src/core/extras/createEmoteFactory.js";
+import { AgentAvatar } from "./avatar.js";
+import * as Nodes from './hyperfy/src/core/nodes'
 // import { VRMLoaderPlugin } from "@pixiv/three-vrm";
 // --- Mock Browser Environment for Loaders ---
 // These might need adjustment based on GLTFLoader/VRMLoaderPlugin requirements
@@ -212,7 +214,7 @@ export class AgentLoader extends System {
             const factory = gltf.userData.vrm ? createVRMFactory(gltf) : null;
 
             const rootNode = createNode("group", { id: "$root" });
-            const avatarNode = createNode("avatar", { id: "avatar", factory });
+            const avatarNode = new AgentAvatar({ id: "avatar", factory });
             rootNode.add(avatarNode);
 
             result = {
