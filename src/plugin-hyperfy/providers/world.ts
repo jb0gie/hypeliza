@@ -64,8 +64,6 @@ export const hyperfyProvider: Provider = {
   
         const formattedText = `\n\n# Hyperfy World State\nStatus: ${state.status}\n${agentText}\n${entityText} \n\n`;
   
-        console.log("formateettext", formattedText)
-
         // Prepare data for values and raw data
         // Convert map to a more serializable object for the data field
         const entitiesData = Object.fromEntries(state.entities);
