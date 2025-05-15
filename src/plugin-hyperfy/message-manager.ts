@@ -1,6 +1,6 @@
 import { ChannelType, Content, EventType, HandlerCallback, IAgentRuntime, Memory, UUID, createUniqueUuid, formatMessages, getEntityDetails } from "@elizaos/core";
 import { HyperfyService } from "./service";
-import { msgGuard } from "./guards";
+import { agentActivityLock } from "./guards";
 import { messageHandlerTemplate } from "./templates";
 
 export class MessageManager {
@@ -16,7 +16,7 @@ export class MessageManager {
 
   async handleMessage(msg): Promise<void> {
     // maybe a thinking emote here?
-    await msgGuard.run(async () => {
+    await agentActivityLock.run(async () => {
       const service = this.getService();
       const world = service.getWorld();
       const agentPlayerId = world.entities.player.data.id // Get agent's ID
@@ -151,14 +151,14 @@ export class MessageManager {
 
         // Emit the MESSAGE_RECEIVED event to trigger the message handler
         console.info(`[Hyperfy Chat] Emitting MESSAGE_RECEIVED event for message: ${messageId}`)
-        msgGuard.enter();
+        agentActivityLock.enter();
         await this.runtime.emitEvent(EventType.MESSAGE_RECEIVED, {
             runtime: this.runtime,
             message: memory,
             callback: callback,
             source: 'hyperfy',
             onComplete: () => {
-              msgGuard.exit();
+              agentActivityLock.exit();
             }
           },
         )

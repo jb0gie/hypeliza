@@ -1,7 +1,7 @@
 import { ChannelType, Content, HandlerCallback, IAgentRuntime, Memory, ModelType, UUID, createUniqueUuid, getWavHeader, logger } from "@elizaos/core";
 import { HyperfyService } from "./service";
 import { convertToAudioBuffer } from "./utils";
-import { msgGuard } from "./guards";
+import { agentActivityLock } from "./guards";
 
 type LiveKitAudioData = {
   participant: string;
@@ -88,7 +88,7 @@ export class VoiceManager {
     }
 
     this.transcriptionTimeout = setTimeout(async () => {
-      await msgGuard.run(async () => {
+      await agentActivityLock.run(async () => {
         this.processingVoice = true;
         try {
           await this.processTranscription(playerId);
@@ -233,14 +233,14 @@ export class VoiceManager {
         }
       };
 
-      msgGuard.enter();
+      agentActivityLock.enter();
       // Emit voice-specific events
       this.runtime.emitEvent(['VOICE_MESSAGE_RECEIVED'], {
         runtime: this.runtime,
         message: memory,
         callback,
         onComplete: () => {
-          msgGuard.exit();
+          agentActivityLock.exit();
         },
       });
     } catch (error) {

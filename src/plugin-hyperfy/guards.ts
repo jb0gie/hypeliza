@@ -4,7 +4,7 @@
  * Used to prevent behavior execution during active message processing.
  */
 
-export class MessageActivityGuard {
+export class AgentActivityLock {
     private count = 0;
   
     isActive(): boolean {
@@ -31,5 +31,5 @@ export class MessageActivityGuard {
   
 
 
-export const msgGuard = new MessageActivityGuard();
+export const agentActivityLock = new AgentActivityLock();
   
