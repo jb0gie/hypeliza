@@ -1,68 +1,126 @@
 import {
-    type Action,
-    type HandlerCallback,
-    type IAgentRuntime,
-    type Memory,
-    type State,
-    logger
+  type Action,
+  type HandlerCallback,
+  type IAgentRuntime,
+  type Memory,
+  type State,
+  logger,
+  composePromptFromState,
+  ModelType
 } from '@elizaos/core';
 import { HyperfyService } from '../service';
+import { AgentActions } from '../actions';
+import { AgentControls } from '../controls';
 
-export const hyperfyUseNearestObjectAction: Action = {
-    name: 'HYPERFY_USE_NEAREST_OBJECT',
-    similes: ['USE_OBJECT', 'INTERACT_WITH_OBJECT', 'PRESS_USE_KEY'],
-    description: 'Simulates pressing the "use" key (E) to interact with the nearest usable object in the Hyperfy world.',
-    validate: async (runtime: IAgentRuntime): Promise<boolean> => {
-      const service = runtime.getService<HyperfyService>(HyperfyService.serviceType);
-      // Check if connected and controls are available (needed for triggerUseAction)
-      return !!service && service.isConnected() && !!service.getWorld()?.controls;
-    },
-    handler: async (
-      runtime: IAgentRuntime,
-      _message: Memory,
-      _state: State,
-      options: { duration?: number }, // Allow optional duration override (in milliseconds)
-      callback: HandlerCallback
-    ) => {
-      const service = runtime.getService<HyperfyService>(HyperfyService.serviceType);
-      if (!service) {
-        logger.error('Hyperfy service not found for HYPERFY_USE_NEAREST_OBJECT action.');
-        await callback({ text: "Error: Cannot interact. Hyperfy connection unavailable." });
-        return;
-      }
+// Template to extract entity to interact with
+const useItemTemplate = `
+# Task: Decide if the agent should interact with an entity (e.g. pick up or activate) based on recent context.
+# DO NOT assume the last message has a command. Look at overall context.
+# ONLY return entity IDs that exist in the Hyperfy World State.
 
-      const holdDuration = options?.duration; // Use provided duration if available, service has default
+{{providers}}
 
+# Instructions:
+Decide if the agent should use/interact with a specific entity based on the conversation and world state.
+
+Response format:
+\`\`\`json
+{
+  "entityId": "<string>" // or null if none
+}
+\`\`\`
+`;
+
+export const hyperfyUseItemAction: Action = {
+  name: 'HYPERFY_USE_ITEM',
+  similes: ['INTERACT_WITH_ITEM', 'USE_NEARBY_OBJECT', 'PICK_UP_ITEM'],
+  description: 'Triggers an interaction with a nearby interactive entity, such as picking up or using an item.',
+  validate: async (runtime: IAgentRuntime): Promise<boolean> => {
+    const service = runtime.getService<HyperfyService>(HyperfyService.serviceType);
+    const world = service?.getWorld();
+    return !!service && service.isConnected() && !!world?.controls && !!world?.actions;
+  },
+  handler: async (
+    runtime: IAgentRuntime,
+    message: Memory,
+    _state: State,
+    options: { entityId?: string },
+    callback: HandlerCallback
+  ) => {
+    const service = runtime.getService<HyperfyService>(HyperfyService.serviceType);
+    const world = service?.getWorld();
+    const controls = world?.controls as AgentControls;
+    const actions = world?.actions as AgentActions | undefined;
+
+    if (!service || !world || !actions) {
+      logger.error('Hyperfy service, world, or actions not found for HYPERFY_USE_ITEM action.');
+      await callback({ text: "Error: Cannot use item. Agent action system unavailable." });
+      return;
+    }
+
+    let targetEntityId = options?.entityId;
+
+    if (!targetEntityId) {
+      logger.info('[USE ITEM] No entityId provided, attempting LLM extraction...');
       try {
-        // Call the service method to simulate the key press
-        await service.triggerUseAction(holdDuration); // Pass duration if provided
+        const useState = await runtime.composeState(message, ['HYPERFY_WORLD_STATE', 'RECENT_MESSAGES']);
+        const prompt = composePromptFromState({ state: useState, template: useItemTemplate });
+        const response = await runtime.useModel(ModelType.OBJECT_SMALL, { prompt });
 
-        // Provide confirmation via callback
-        // Note: We don't know *what* object was used, just that the action was attempted.
-        await callback({
-           text: `Attempted to use the nearest object.`,
-           actions: ['HYPERFY_USE_NEAREST_OBJECT'],
-           source: 'hyperfy',
-           metadata: {
-               status: 'action_simulated',
-               simulatedKey: 'E',
-               holdDurationMs: holdDuration || 600 // Report the duration used (get default from service if possible?)
-           }
-        });
-
-      } catch (error: any) {
-        logger.error(`Error during HYPERFY_USE_NEAREST_OBJECT:`, error);
-        await callback({ text: `Error trying to use object: ${error.message}` });
+        if (response?.entityId && typeof response.entityId === 'string') {
+          targetEntityId = response.entityId;
+          logger.info(`[USE ITEM] Extracted entity ID: ${targetEntityId}`);
+        } else {
+          logger.warn('[USE ITEM] No valid entityId extracted.');
+        }
+      } catch (err) {
+        logger.error('[USE ITEM] Extraction failed:', err);
       }
-    },
-     examples: [
-      [
-        { name: '{{name1}}', content: { text: 'Use the object in front of me.' } },
-        { name: '{{name2}}', content: { text: 'Attempted to use the nearest object.', actions: ['HYPERFY_USE_NEAREST_OBJECT'], source: 'hyperfy' } } // Simplified example
-      ],
-       [
-        { name: '{{name1}}', content: { text: 'Interact with the button.' } },
-        { name: '{{name2}}', content: { text: 'Attempted to use the nearest object.', actions: ['HYPERFY_USE_NEAREST_OBJECT'], source: 'hyperfy' } }
-      ]
-     ]
-  }; 
+    }
+
+    if (!targetEntityId) {
+      await callback({
+        text: "No suitable item found to use based on the context.",
+        metadata: { error: 'missing_entity_id' }
+      });
+      return;
+    }
+
+    
+    const entity = world.entities.items.get(targetEntityId);
+    const targetPosition = entity?.root?.position
+    if (!targetPosition) {
+      await callback({
+        text: `Could not locate entity ${targetEntityId}.`,
+        metadata: { error: 'entity_not_found' }
+      });
+      return;
+    }
+
+    await controls.goto(targetPosition.x, targetPosition.z);
+
+    logger.info(`[USE ITEM] Attempting to use item with entity ID: ${targetEntityId}`);
+    actions.performAction(targetEntityId);
+
+    await callback({
+      text: `Using item: ${targetEntityId}`,
+      actions: ['HYPERFY_USE_ITEM'],
+      source: 'hyperfy',
+      metadata: { targetEntityId, status: 'triggered' }
+    });
+  },
+  examples: [
+    [
+      { name: '{{name1}}', content: { text: 'Pick up the book.' } },
+      { name: '{{name2}}', content: { text: 'Using item: book123', actions: ['HYPERFY_USE_ITEM'], source: 'hyperfy' } }
+    ],
+    [
+      { name: '{{name1}}', content: { text: 'Interact with the glowing orb.' } },
+      { name: '{{name2}}', content: { text: 'Using item: orb888', actions: ['HYPERFY_USE_ITEM'], source: 'hyperfy' } }
+    ],
+    [
+      { name: '{{name1}}', content: { text: 'Do we need to pick something up?' } },
+      { name: '{{name2}}', content: { text: 'No suitable item found to use based on the context.' } }
+    ]
+  ]
+};

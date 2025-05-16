@@ -5,6 +5,8 @@ import { createNode } from "./hyperfy/src/core/extras/createNode.js";
 import { GLTFLoader } from "./hyperfy/src/core/libs/gltfloader/GLTFLoader.js";
 import { glbToNodes } from "./hyperfy/src/core/extras/glbToNodes.js";
 import { createEmoteFactory } from "./hyperfy/src/core/extras/createEmoteFactory.js";
+import { AgentAvatar } from "./avatar.js";
+import * as Nodes from './hyperfy/src/core/nodes'
 // import { VRMLoaderPlugin } from "@pixiv/three-vrm";
 // --- Mock Browser Environment for Loaders ---
 // These might need adjustment based on GLTFLoader/VRMLoaderPlugin requirements
@@ -147,21 +149,26 @@ export class AgentLoader extends System {
           return this.parseGLB(type, key, arrayBuffer, resolved);
         }
 
-        // HACK: Only allow loading scripts that create a collider.
-        // TODO: Replace with a more robust script validation system.
+        // TEMP WORKAROUND: Only load scripts that do not create video, UI, or image elements.
+        // TODO: Replace this with a proper script validation system.
         if (type === 'script') {
           const code = await response.text();
-          
-          const hasCollider = /app\.create\(['"]collider['"]\)/.test(code);
-          if (!hasCollider) {
-            console.warn("Skipping script because it does not create a collider.");
+
+          const forbiddenTypes = ['video', 'ui', 'image'];
+          const isForbidden = forbiddenTypes.some(type =>
+            new RegExp(`app\\.create\\s*\\(\\s*['"]${type}['"]\\s*(,|\\))`).test(code)
+          );
+
+          if (isForbidden) {
+            console.warn(`[ScriptLoader] Skipping script: disallowed type used\n`);
             return;
           }
-          
+
           const script = this.world.scripts.evaluate(code);
           this.results.set(key, script);
           return script;
         }
+
         
         console.warn(`[AgentLoader] Unsupported type in load(): ${type}`);
         return null;
@@ -207,7 +214,7 @@ export class AgentLoader extends System {
             const factory = gltf.userData.vrm ? createVRMFactory(gltf) : null;
 
             const rootNode = createNode("group", { id: "$root" });
-            const avatarNode = createNode("avatar", { id: "avatar", factory });
+            const avatarNode = new AgentAvatar({ id: "avatar", factory });
             rootNode.add(avatarNode);
 
             result = {
