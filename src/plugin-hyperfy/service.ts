@@ -23,6 +23,7 @@ import { createNodeClientWorld } from './hyperfy/src/core/createNodeClientWorld.
 import { AgentControls } from './controls'
 import { AgentLoader } from './loader'
 import { AgentLiveKit } from './liveKit.js'
+import { AgentActions } from './actions.js'
 import { Vector3Enhanced } from './hyperfy/src/core/extras/Vector3Enhanced.js'
 import { loadPhysX } from './physx/loadPhysX.js'
 import { BehaviorManager } from "./behavior-manager.js"
@@ -180,6 +181,10 @@ export class HyperfyService extends Service {
       const livekit = new AgentLiveKit(world);
       ;(world as any).livekit = livekit
       world.systems.push(livekit);
+
+      const actions = new AgentActions(world);
+      ;(world as any).actions = actions
+      world.systems.push(actions);
       
       this.controls = new AgentControls(world)
       ;(world as any).controls = this.controls
@@ -279,7 +284,7 @@ export class HyperfyService extends Service {
       this.voiceManager = new VoiceManager(this.runtime);
 
       this.behaviorManager = new BehaviorManager(this.runtime);
-      this.behaviorManager.start();
+      // this.behaviorManager.start();
       
       this.startSimulation()
       this.startEntityUpdates()
