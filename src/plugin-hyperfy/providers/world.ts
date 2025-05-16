@@ -75,7 +75,7 @@ export const hyperfyProvider: Provider = {
           const entityId = entity?.data?.id ?? 'unknown';
           const entityName = entity?.blueprint?.name ?? 'Unnamed';
 
-          actionLines.push(`- Action "${label}" on Entity "${entityName}" (ID: ${entityId}) at Pos(${positionStr})`);
+          actionLines.push(`- Action "${label}" on Entity "${entityName}" (ID: ${entityId}) at Position: (${positionStr})`);
         }
 
         const actionText = actionLines.length > 0
