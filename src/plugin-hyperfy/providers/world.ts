@@ -62,7 +62,9 @@ export const hyperfyProvider: Provider = {
             : 'Entities: None found';
 
         const actionLines: string[] = [];
-        const nearbyActions = world.actions.getNearby(); // ← call the function
+        const actionsSystem = world?.actions;
+        const currentAction = actionsSystem?.currentNode;
+        const nearbyActions = actionsSystem.getNearby();
 
         for (const action of nearbyActions) {
           const entity = action.ctx?.entity;
@@ -82,7 +84,18 @@ export const hyperfyProvider: Provider = {
           ? `Actions (${actionLines.length} total):\n${actionLines.join('\n')}`
           : 'Actions: None found';
 
-        const formattedText = `\n\n# Hyperfy World State\nStatus: ${state.status}\n${agentText}\n${entityText}\n\n${actionText}\n\n`;
+        let equipText = 'Equipped: None';
+
+        if (currentAction) {
+          const entity = currentAction.ctx?.entity;
+          const label = currentAction._label ?? 'Unnamed Action';
+          const entityId = entity?.data?.id ?? 'unknown';
+          const entityName = entity?.blueprint?.name ?? 'Unnamed';
+
+          equipText = `Equipped: "${label}" on "${entityName}" (ID: ${entityId})`;
+        }
+
+        const formattedText = `\n\n# Hyperfy World State\nStatus: ${state.status}\n${agentText}\n${entityText}\n\n${actionText}\n\n${equipText}\n\n`;
 
         // Prepare data for values and raw data
         // Convert map to a more serializable object for the data field
