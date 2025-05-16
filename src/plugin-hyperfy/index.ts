@@ -9,7 +9,8 @@ import { HyperfyService } from './service';
 import { z } from 'zod';
 import { hyperfyChatAction } from './actions/chat';
 import { hyperfyGotoEntityAction } from './actions/goto';
-import { hyperfyUseNearestObjectAction } from './actions/use';
+import { hyperfyUseItemAction } from './actions/use';
+import { hyperfyUnuseItemAction } from './actions/unuse';
 import { hyperfyStopMovingAction } from './actions/stop';
 import { hyperfyWalkRandomlyAction } from './actions/walk_randomly';
 import { hyperfyProvider } from './providers/world';
@@ -144,7 +145,8 @@ export const hyperfyPlugin: Plugin = {
   actions: [
       hyperfyChatAction,
       hyperfyGotoEntityAction,
-      hyperfyUseNearestObjectAction,
+      hyperfyUseItemAction,
+      hyperfyUnuseItemAction,
       hyperfyStopMovingAction,
       hyperfyWalkRandomlyAction
   ],
