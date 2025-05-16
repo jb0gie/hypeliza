@@ -9,7 +9,7 @@ import {
   ModelType
 } from '@elizaos/core';
 import { HyperfyService } from '../service';
-import { AgentActions } from '../actions'; // assuming this exposes performAction
+import { AgentActions } from '../actions';
 import { AgentControls } from '../controls';
 
 // Template to extract entity to interact with
