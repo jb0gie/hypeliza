@@ -44,7 +44,7 @@ export const hyperfyProvider: Provider = {
         // Iterate over the entities Map from the service state
         for (const [id, entity] of entities.entries()) {
              const position = entity?.base?.position || entity?.root?.position;
-             const name = entity?.data?.name;
+             const name = entity?.data?.name || entity?.blueprint?.name;
              const type = entity?.data?.type;
              
              let pos = 'N/A';
@@ -60,10 +60,30 @@ export const hyperfyProvider: Provider = {
         const entityText = entities?.size > 0
             ? `Entities (${entities?.size} total):\n${entityLines.join('\n')}`
             : 'Entities: None found';
-  
-  
-        const formattedText = `\n\n# Hyperfy World State\nStatus: ${state.status}\n${agentText}\n${entityText} \n\n`;
-  
+
+        const actionLines: string[] = [];
+        const nearbyActions = world.actions.getNearby(); // ← call the function
+
+        for (const action of nearbyActions) {
+          const entity = action.ctx?.entity;
+          const pos = entity?.root?.position;
+          const positionStr = (pos && (pos instanceof THREE.Vector3 || pos instanceof Vector3Enhanced))
+            ? [pos.x, pos.y, pos.z].map(p => p.toFixed(2)).join(', ')
+            : 'N/A';
+
+          const label = action._label ?? 'Unnamed Action';
+          const entityId = entity?.data?.id ?? 'unknown';
+          const entityName = entity?.blueprint?.name ?? 'Unnamed';
+
+          actionLines.push(`- Action "${label}" on Entity "${entityName}" (ID: ${entityId}) at Pos(${positionStr})`);
+        }
+
+        const actionText = actionLines.length > 0
+          ? `Actions (${actionLines.length} total):\n${actionLines.join('\n')}`
+          : 'Actions: None found';
+
+        const formattedText = `\n\n# Hyperfy World State\nStatus: ${state.status}\n${agentText}\n${entityText}\n\n${actionText}\n\n`;
+
         // Prepare data for values and raw data
         // Convert map to a more serializable object for the data field
         const entitiesData = Object.fromEntries(state.entities);
