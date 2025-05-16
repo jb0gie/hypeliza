@@ -284,7 +284,7 @@ export class HyperfyService extends Service {
       this.voiceManager = new VoiceManager(this.runtime);
 
       this.behaviorManager = new BehaviorManager(this.runtime);
-      // this.behaviorManager.start();
+      this.behaviorManager.start();
       
       this.startSimulation()
       this.startEntityUpdates()
