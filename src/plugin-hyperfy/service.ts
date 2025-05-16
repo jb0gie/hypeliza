@@ -10,27 +10,27 @@ import {
   type IAgentRuntime,
   logger,
   type Memory,
-  Service
+  Service,
+  ModelType,
+  composePromptFromState
 } from '@elizaos/core'
 import crypto from 'crypto'
 import fs from 'fs/promises'
 import path from 'path'
 import { performance } from 'perf_hooks'
 import * as THREE from 'three'
-import { createClientWorld } from './hyperfy/core/createClientWorld.js'
-import { extendThreePhysX } from './hyperfy/core/extras/extendThreePhysX.js'
-import { geometryToPxMesh } from './hyperfy/core/extras/geometryToPxMesh.js'
-import { loadNodePhysX } from './hyperfy/core/loadNodePhysX.js'
+import { createNodeClientWorld } from './hyperfy/src/core/createNodeClientWorld.js'
 import { AgentControls } from './controls'
 import { AgentLoader } from './loader'
-
-async function hashFileBuffer(buffer: Buffer): Promise<string> {
-  const hashBuf = await crypto.subtle.digest('SHA-256', buffer)
-  const hash = Array.from(new Uint8Array(hashBuf))
-    .map(b => b.toString(16).padStart(2, '0'))
-    .join('')
-  return hash
-}
+import { AgentLiveKit } from './liveKit.js'
+import { AgentActions } from './actions.js'
+import { Vector3Enhanced } from './hyperfy/src/core/extras/Vector3Enhanced.js'
+import { loadPhysX } from './physx/loadPhysX.js'
+import { BehaviorManager } from "./behavior-manager.js"
+import { EmoteManager } from './emote-manager.js'
+import { MessageManager } from './message-manager.js'
+import { VoiceManager } from './voice-manager.js'
+import { hashFileBuffer } from './utils'
 
 const LOCAL_AVATAR_PATH = process.env.HYPERFY_AGENT_AVATAR_PATH || './avatar.vrm'
 
@@ -67,6 +67,12 @@ export class HyperfyService extends Service {
   private PHYSX: any = null
   private isPhysicsSetup: boolean = false
   private connectionTime: number | null = null
+  private emoteHashMap: Map<string, string> = new Map();
+  private currentEmoteTimeout: NodeJS.Timeout | null = null;
+  private behaviorManager: BehaviorManager;
+  private emoteManager: EmoteManager;
+  private messageManager: MessageManager;
+  private voiceManager: VoiceManager;
 
   public get currentWorldId(): UUID | null {
     return this._currentWorldId
@@ -166,27 +172,51 @@ export class HyperfyService extends Service {
     this.isPhysicsSetup = false
 
     try {
-      console.info("[Hyperfy Connect] Loading PhysX...")
-      this.PHYSX = await loadNodePhysX()
-      if (!this.PHYSX) {
-        throw new Error("Failed to load PhysX.")
-      }
-      ;(globalThis as any).PHYSX = this.PHYSX
-      console.info("[Hyperfy Connect] PhysX loaded. Extending THREE...")
-
-      const world = createClientWorld()
+      const world = createNodeClientWorld()
       this.world = world
       ;(world as any).playerNamesMap = this.playerNamesMap
 
       globalThis.self = globalThis
 
+      const livekit = new AgentLiveKit(world);
+      ;(world as any).livekit = livekit
+      world.systems.push(livekit);
+
+      const actions = new AgentActions(world);
+      ;(world as any).actions = actions
+      world.systems.push(actions);
+      
       this.controls = new AgentControls(world)
       ;(world as any).controls = this.controls
       world.systems.push(this.controls)
       // Temporarily comment out AgentLoader to test for updateTransform error
       const loader = new AgentLoader(world)
       ;(world as any).loader = loader
-      world.systems.push(loader)
+      world.systems.push(loader);
+
+      // HACK: Overwriting `chat.add` to prevent crashes caused by the original implementation.
+      // This ensures safe handling of chat messages and avoids unexpected errors from undefined fields.
+      (world as any).chat.add = (msg, broadcast) => {
+        const chat = (world as any).chat;
+        const MAX_MSGS = 50;
+        
+        chat.msgs = [...chat.msgs, msg]
+
+        if (chat.msgs.length > MAX_MSGS) {
+          chat.msgs.shift()
+        }
+        for (const callback of chat.listeners) {
+          callback(chat.msgs)
+        }
+
+        // emit chat event
+        const readOnly = Object.freeze({ ...msg })
+        this.world.events.emit('chat', readOnly)
+        // maybe broadcast
+        if (broadcast) {
+          this.world.network.send('chatAdded', msg)
+        }
+      };
 
       const mockElement = {
         appendChild: () => {},
@@ -203,6 +233,7 @@ export class HyperfyService extends Service {
         viewport: mockElement,
         ui: mockElement,
         initialAuthToken: config.authToken,
+        loadPhysX
       }
 
       if (typeof this.world.init !== 'function') {
@@ -244,15 +275,17 @@ export class HyperfyService extends Service {
         console.info(`Populated ${this.processedMsgIds.size} processed message IDs from history.`)
       }
 
-      // ---> Moved Physics Setup Here <--- 
-      // Wait for world systems and potentially initial snapshot data before setting up physics
-      await this.setupStaticPhysicsFromEnvironment()
-      // ----------------------------------
-
       this.subscribeToHyperfyEvents()
 
       this.isConnectedState = true
 
+      this.emoteManager = new EmoteManager(this.runtime);
+      this.messageManager = new MessageManager(this.runtime);
+      this.voiceManager = new VoiceManager(this.runtime);
+
+      this.behaviorManager = new BehaviorManager(this.runtime);
+      this.behaviorManager.start();
+      
       this.startSimulation()
       this.startEntityUpdates()
 
@@ -293,231 +326,133 @@ export class HyperfyService extends Service {
     }
   }
 
-  private async setupStaticPhysicsFromEnvironment(): Promise<void> {
-    if (this.isPhysicsSetup) {
-        console.info("[Physics Setup] Skipping: Already setup.")
-        return
+  /**
+   * Uploads the character's avatar model and associated emote animations,
+   * sets the avatar URL locally, updates emote hash mappings,
+   * and notifies the server of the new avatar.
+   * 
+   * This function handles all assets required for character expression and animation.
+   */
+  private async uploadCharacterAssets(): Promise<{
+    success: boolean;
+    error?: string;
+  }> {
+    if (
+      !this.world ||
+      !this.world.entities?.player ||
+      !this.world.network ||
+      !this.world.assetsUrl
+    ) {
+      console.warn(
+        "[Appearance] Cannot set avatar: World, player, network, or assetsUrl not ready."
+      );
+      return { success: false, error: "Prerequisites not met" };
     }
-     if (!this.world || !this.PHYSX) {
-        console.warn("[Physics Setup] Skipping: World or PhysX not ready.")
-        return
-    }
-    console.info("[Physics Setup] Setting up static environment geometry...")
 
-    const physicsSystem = this.world.physics
-    if (!physicsSystem || !physicsSystem.physics || !physicsSystem.scene || !physicsSystem.material) {
-        console.error("[Physics Setup] Physics system components (physics, scene, material) not ready in world instance.")
-        return
-    }
-     const physics = physicsSystem.physics
-     const scene = physicsSystem.scene
-     const material = physicsSystem.material
-
-    const envModelUrl = this.world.settings?.model?.url
-    if (!envModelUrl) {
-        console.warn("[Physics Setup] No environment model URL found in world settings.")
-        this.isPhysicsSetup = true
-        return
-    }
+    const agentPlayer = this.world.entities.player;
+    const localAvatarPath = path.resolve(LOCAL_AVATAR_PATH);
+    let fileName = "";
 
     try {
-        console.info(`[Physics Setup] Loading environment model: ${envModelUrl}`)
-        if (!this.world.loader || typeof this.world.loader.load !== 'function') {
-            throw new Error("world.loader.load is not available.")
-        }
-        const envGltf = await this.world.loader.load('model', envModelUrl)
-        console.info(`[Physics Setup] Environment model loaded successfully.`)
+      console.info(`[Appearance] Reading avatar file from: ${localAvatarPath}`);
+      const fileBuffer: Buffer = await fs.readFile(localAvatarPath);
+      fileName = path.basename(localAvatarPath);
+      const mimeType = fileName.endsWith(".vrm")
+        ? "model/gltf-binary"
+        : "application/octet-stream";
 
-        if (!envGltf || !envGltf.scene) {
-            throw new Error("Loaded GLTF is invalid or has no scene.")
-        }
+      console.info(
+        `[Appearance] Uploading ${fileName} (${(fileBuffer.length / 1024).toFixed(2)} KB, Type: ${mimeType})...`
+      );
 
-        console.info("[Physics Setup] PhysX components obtained from world instance.")
+      if (!crypto.subtle || typeof crypto.subtle.digest !== "function") {
+        throw new Error(
+          "crypto.subtle.digest is not available. Ensure Node.js version supports Web Crypto API."
+        );
+      }
 
-        const physxTransform = new this.PHYSX.PxTransform(this.PHYSX.PxIdentityEnum.PxIdentity)
-        let meshesProcessed = 0
-        let actorsAdded = 0
-        const traversalErrors: Error[] = []
+      const hash = await hashFileBuffer(fileBuffer);
+      const ext = fileName.split(".").pop()?.toLowerCase() || "vrm";
+      const fullFileNameWithHash = `${hash}.${ext}`;
+      const baseUrl = this.world.assetsUrl.replace(/\/$/, "");
+      const constructedHttpUrl = `${baseUrl}/${fullFileNameWithHash}`;
 
-        envGltf.scene.updateMatrixWorld(true)
+      if (typeof this.world.network.upload !== "function") {
+        console.warn(
+          "[Appearance] world.network.upload function not found. Cannot upload."
+        );
+        return { success: false, error: "Upload function unavailable" };
+      }
 
-        envGltf.scene.traverseVisible((node: any) => {
-            if (node instanceof THREE.Mesh && node.geometry) {
-                console.debug(`[Physics Setup] Processing mesh: ${node.name || '(unnamed)'}`)
-                meshesProcessed++
-                let pmeshHandle: any = null
-                try {
-                    if (typeof geometryToPxMesh !== 'function') {
-                        throw new Error("geometryToPxMesh function is not available.")
-                    }
-                    pmeshHandle = geometryToPxMesh(this.world, node.geometry, false)
+      try {
+        console.info(
+          `[Appearance] Uploading avatar to ${constructedHttpUrl}...`
+        );
+        const fileForUpload = new File([fileBuffer], fileName, {
+          type: mimeType,
+        });
 
-                    if (!pmeshHandle || !pmeshHandle.value) {
-                        throw new Error(`geometryToPxMesh returned null/invalid for mesh ${node.name || '(unnamed)'}`)
-                    }
-                    const cookedMesh = pmeshHandle.value
+        const uploadPromise = this.world.network.upload(fileForUpload);
+        const timeoutPromise = new Promise((_resolve, reject) =>
+          setTimeout(() => reject(new Error("Upload timed out")), 30000)
+        );
 
-                    const worldScale = new THREE.Vector3()
-                    const worldQuat = new THREE.Quaternion()
-                    node.getWorldScale(worldScale)
-                    node.getWorldQuaternion(worldQuat)
+        await Promise.race([uploadPromise, timeoutPromise]);
+        console.info(`[Appearance] Avatar uploaded successfully.`);
+      } catch (uploadError: any) {
+        console.error(
+          `[Appearance] Avatar upload failed: ${uploadError.message}`,
+          uploadError.stack
+        );
+        return {
+          success: false,
+          error: `Upload failed: ${uploadError.message}`,
+        };
+      }
 
-                    if (typeof (worldScale as any).toPxVec3 !== 'function' || typeof (worldQuat as any).toPxQuat !== 'function') {
-                         throw new Error("THREE.Vector3.toPxVec3 or THREE.Quaternion.toPxQuat not available. extendThreePhysX likely failed or wasn't called correctly.")
-                     }
-                    const meshScalePx = (worldScale as any).toPxVec3()
-                    const meshQuatPx = (worldQuat as any).toPxQuat()
+      // Apply avatar locally
+      if (agentPlayer && typeof agentPlayer.setSessionAvatar === "function") {
+        agentPlayer.setSessionAvatar(constructedHttpUrl);
+      } else {
+        console.warn(
+          "[Appearance] agentPlayer.setSessionAvatar not available."
+        );
+      }
 
-                    const meshScale = new this.PHYSX.PxMeshScale(meshScalePx, { x: 0, y: 0, z: 0, w: 1 })
+      // Upload emotes
+      await this.emoteManager.uploadEmotes();
 
-                    const meshGeometry = new this.PHYSX.PxTriangleMeshGeometry(cookedMesh, meshScale, new this.PHYSX.PxMeshGeometryFlags(0))
-                    if (!meshGeometry.isValid()) {
-                        pmeshHandle?.release?.()
-                        throw new Error("Created PxTriangleMeshGeometry is invalid")
-                    }
+      // Notify server
+      if (typeof this.world.network.send === "function") {
+        this.world.network.send("playerSessionAvatar", {
+          avatar: constructedHttpUrl,
+        });
+        console.info(
+          `[Appearance] Sent playerSessionAvatar with: ${constructedHttpUrl}`
+        );
+      } else {
+        console.error(
+          "[Appearance] Upload succeeded but world.network.send is not available."
+        );
+      }
 
-                    const shapeFlags = new this.PHYSX.PxShapeFlags(
-                        this.PHYSX.PxShapeFlagEnum.eSCENE_QUERY_SHAPE | this.PHYSX.PxShapeFlagEnum.eSIMULATION_SHAPE
-                    )
-                    const shape = physics.createShape(meshGeometry, material, true, shapeFlags)
-
-                    const filterData = new this.PHYSX.PxFilterData(1, 1 << 0, 0, 0)
-                    shape.setSimulationFilterData(filterData)
-                    shape.setQueryFilterData(filterData)
-
-                    if (typeof (node.matrixWorld as any).toPxTransform !== 'function') {
-                         throw new Error("THREE.Matrix4.toPxTransform not available. extendThreePhysX likely failed or wasn't called correctly.")
-                    }
-                    (node.matrixWorld as any).toPxTransform(physxTransform)
-                    const staticActor = physics.createRigidStatic(physxTransform)
-
-                    staticActor.attachShape(shape)
-                    scene.addActor(staticActor)
-                    actorsAdded++
-                    console.debug(`[Physics Setup] Added static actor for ${node.name || '(unnamed)'}.`)
-
-                } catch (error: any) {
-                    console.error(`[Physics Setup] Error processing mesh ${node.name || '(unnamed)'}:`, error)
-                    traversalErrors.push(error)
-                } finally {
-                    pmeshHandle?.release?.()
-                }
-            }
-        })
-
-        if (traversalErrors.length > 0) {
-            console.warn(`[Physics Setup] Finished. Meshes processed: ${meshesProcessed}, Actors added: ${actorsAdded}, Errors: ${traversalErrors.length}.`)
-        } else {
-            console.info(`[Physics Setup] Finished successfully. Meshes processed: ${meshesProcessed}, Actors added: ${actorsAdded}.`)
-        }
-        this.isPhysicsSetup = true
-
+      return { success: true };
     } catch (error: any) {
-        console.error(`[Physics Setup] Failed to load or process environment model ${envModelUrl}:`, error)
-        this.isPhysicsSetup = true
+      if (error.code === "ENOENT") {
+        console.error(
+          `[Appearance] Avatar file not found at ${localAvatarPath}. CWD: ${process.cwd()}`
+        );
+      } else {
+        console.error(
+          "[Appearance] Unexpected error during avatar process:",
+          error.message,
+          error.stack
+        );
+      }
+      return { success: false, error: error.message };
     }
   }
 
-  private async uploadAndSetAvatar(): Promise<{ success: boolean, error?: string }> {
-    if (!this.world || !this.world.entities?.player || !this.world.network || !this.world.assetsUrl) {
-        console.warn("[Appearance] Cannot set avatar: World, player, network, or assetsUrl not ready.");
-        return { success: false, error: "Prerequisites not met" };
-    }
-
-    const agentPlayer = this.world.entities.player
-    let fileName = ''
-    const localAvatarPath = path.resolve(LOCAL_AVATAR_PATH)
-
-    try {
-        console.info(`[Appearance] Reading avatar file from: ${localAvatarPath}`)
-        const fileBuffer: Buffer = await fs.readFile(localAvatarPath)
-        fileName = path.basename(localAvatarPath)
-        const mimeType = fileName.endsWith('.vrm') ? 'model/gltf-binary' : 'application/octet-stream'
-
-        console.info(`[Appearance] Uploading ${fileName} (${(fileBuffer.length / 1024).toFixed(2)} KB, Type: ${mimeType})...`)
-
-        if (!crypto.subtle || typeof crypto.subtle.digest !== 'function') {
-            throw new Error("crypto.subtle.digest is not available. Ensure Node.js version supports Web Crypto API.");
-        }
-        const hash = await hashFileBuffer(fileBuffer);
-        const ext = fileName.split('.').pop()?.toLowerCase() || 'vrm';
-        const fullFileNameWithHash = `${hash}.${ext}`;
-        const baseUrl = this.world.assetsUrl.replace(/\/$/, '');
-        const constructedHttpUrl = `${baseUrl}/${fullFileNameWithHash}`;
-        console.info(`[Appearance] Constructed HTTP(S) URL: ${constructedHttpUrl}`)
-
-        // --- Perform Upload and Server Update --- >
-        let uploadSuccessful = false;
-        if (typeof this.world.network.upload === 'function') {
-           console.info(`[Appearance] Calling world.network.upload for ${fullFileNameWithHash}...`);
-            try {
-                const uploadPromise = this.world.network.upload({ 
-                    buffer: fileBuffer, 
-                    name: fileName, // Original filename might still be needed by upload func
-                    type: mimeType, 
-                    size: fileBuffer.length,
-                });
-
-                // Add a timeout for the upload operation (e.g., 30 seconds)
-                const UPLOAD_TIMEOUT_MS = 30000;
-                const timeoutPromise = new Promise((_resolve, reject) => 
-                    setTimeout(() => reject(new Error('Upload timed out')), UPLOAD_TIMEOUT_MS)
-                );
-
-                // Assume upload returns a promise that resolves on success
-                await Promise.race([uploadPromise, timeoutPromise]);
-
-                // --- Add logging immediately after await --- >
-                console.info(`[Appearance] Awaited world.network.upload successfully finished for ${fullFileNameWithHash}.`);
-                // <-------------------------------------------
-
-                console.info(`[Appearance] world.network.upload completed for ${fullFileNameWithHash}.`);
-                uploadSuccessful = true;
-             } catch (uploadError: any) {
-                console.error(`[Appearance] world.network.upload failed: ${uploadError.message}`, uploadError.stack);
-                // Don't throw here, let the function return failure status
-                return { success: false, error: `Upload failed: ${uploadError.message}` };
-           }
-        } else {
-           console.warn("[Appearance] world.network.upload function not found. Cannot upload.");
-            return { success: false, error: "Upload function unavailable" }; // Cannot proceed without upload
-        }
-
-        // --- Apply change locally *AFTER* successful upload --- >
-        if (uploadSuccessful && agentPlayer && typeof agentPlayer.setSessionAvatar === 'function') {
-             console.info(`[Appearance] Applying session avatar locally (post-upload): ${constructedHttpUrl}`);
-             agentPlayer.setSessionAvatar(constructedHttpUrl);
-        } else if (uploadSuccessful) {
-             // Still log warning if function is missing, even post-upload
-             console.warn("[Appearance] agentPlayer.setSessionAvatar not available for local application (post-upload).");
-        } else {
-            // If upload failed, we don't apply locally
-             logger.debug("[Appearance] Skipping local avatar application due to upload failure.")
-        }
-        // <---------------------------------------------------
-
-        // Only send network message if upload was successful
-        if (uploadSuccessful && this.world.network && typeof this.world.network.send === 'function') {
-            this.world.network.send('playerSessionAvatar', { avatar: constructedHttpUrl });
-            console.info(`[Appearance] Sent playerSessionAvatar network message with: ${constructedHttpUrl}`);
-            return { success: true }; // Indicate overall success
-        } else if (!uploadSuccessful) {
-            // This case is handled by the return inside the upload try-catch
-            return { success: false, error: "Upload did not succeed (state unknown)" }; 
-        } else {
-             console.error("[Appearance] Upload succeeded but world.network.send is not available.");
-             return { success: false, error: "Network send unavailable after upload" };
-        }
-
-    } catch (error: any) {
-        if (error.code === 'ENOENT') {
-            console.error(`[Appearance] Error: Avatar file not found at ${localAvatarPath}. CWD: ${process.cwd()}`)
-        } else {
-            console.error("[Appearance] Unexpected error during avatar process:", error.message, error.stack)
-        }
-        return { success: false, error: error.message };
-    }
-  }
 
   private startAppearancePolling(): void {
     if (this.appearanceIntervalId) clearInterval(this.appearanceIntervalId);
@@ -568,7 +503,7 @@ export class HyperfyService extends Service {
              // --- Set Avatar (if not already done AND assets URL ready) ---
              if (!pollingTasks.avatar && assetsUrlReady) {
                  console.info(`[Appearance Polling] Player (ID: ${agentPlayerId}), network, assetsUrl ready. Attempting avatar upload and set...`);
-                 const result = await this.uploadAndSetAvatar();
+                 const result = await this.uploadCharacterAssets();
 
                  if (result.success) {
                      this.appearanceSet = true; // Update global state
@@ -618,7 +553,7 @@ export class HyperfyService extends Service {
       }
 
       const entity = this.world?.entities?.items?.get(entityId)
-       if (entity?.base?.position instanceof THREE.Vector3) {
+       if (entity?.base?.position instanceof THREE.Vector3 || entity?.base?.position instanceof Vector3Enhanced) {
             return entity.base.position
        } else if (entity?.data?.position) {
            const pos = entity.data.position
@@ -768,37 +703,6 @@ export class HyperfyService extends Service {
       return new Map(this.currentEntities);
   }
 
-  async sendMessage(text: string): Promise<void> {
-    if (!this.isConnected() || !this.world?.chat || !this.world?.entities?.player) {
-      console.error('HyperfyService: Cannot send message. Not ready.')
-      return
-    }
-
-    try {
-      const agentPlayerId = this.world.entities.player.data.id
-      const agentPlayerName = this.getEntityName(agentPlayerId) || this.world.entities.player.data?.name || 'Hyperliza'
-
-      console.info(`HyperfyService sending message: "${text}" as ${agentPlayerName} (${agentPlayerId})`)
-
-      if (typeof this.world.chat.add !== 'function') {
-        throw new Error('world.chat.add is not a function')
-      }
-
-      this.world.chat.add(
-        {
-          body: text,
-          fromId: agentPlayerId,
-          from: agentPlayerName,
-        },
-        true
-      )
-
-    } catch (error: any) {
-      console.error('Error sending Hyperfy message:', error.message, error.stack)
-      throw error
-    }
-  }
-
   async move(key: string, isDown: boolean): Promise<void> {
     if (!this.isConnected() || !this.controls) throw new Error('HyperfyService: Cannot move. Not connected or controls unavailable.')
     if (typeof this.controls.setKey !== 'function') throw new Error('HyperfyService: controls.setKey method is missing.')
@@ -808,30 +712,6 @@ export class HyperfyService extends Service {
     } catch (error: any) {
       console.error('Error setting key:', error.message, error.stack)
       throw error
-    }
-  }
-
-  /**
-   * Attempts to play an emote using its URL.
-   */
-  async emote(emoteUrl: string): Promise<void> {
-    if (!this.isConnected() || !this.world?.entities?.player) {
-      throw new Error('HyperfyService: Cannot play emote. Player not ready.');
-    }
-    const player = this.world.entities.player;
-
-    // PlayerLocal has a playEmote method
-    if (typeof player.playEmote === 'function') {
-       console.info(`[Action] Attempting to play emote: ${emoteUrl}`);
-       try {
-            player.playEmote(emoteUrl);
-       } catch (error: any) {
-            console.error(`[Action] Error calling player.playEmote: ${error.message}`, error.stack);
-            throw error;
-       }
-    } else {
-       console.warn('[Action] player.playEmote method not found.');
-       throw new Error('HyperfyService: Emote functionality not available on player entity.');
     }
   }
 
@@ -900,7 +780,8 @@ export class HyperfyService extends Service {
           const agentPlayer = this.world.entities.player;
               agentPlayer.modify({ name: newName });
               agentPlayer.data.name = newName
-
+          
+          this.world.network.send('entityModified', { id: agentPlayer.data.id, name: newName })
               console.debug(`[Action] Called agentPlayer.modify({ name: "${newName}" })`);
 
       } catch (error: any) {
@@ -1104,16 +985,13 @@ export class HyperfyService extends Service {
     this.world.chat.subscribe((msgs: any[]) => {
       // Wait for player entity (ensures world/chat exist too)
       if (!this.world || !this.world.chat || !this.world.entities?.player || !this.connectionTime) return
-
-      const agentPlayerId = this.world.entities.player.data.id // Get agent's ID
-      const agentPlayerName = this.getEntityName(agentPlayerId) || this.world.entities.player.data?.name || 'Hyperliza'; // Use name getter
-
+  
       const newMessagesFound: any[] = [] // Temporary list for new messages
 
       // Step 1: Identify new messages and update processed set
       msgs.forEach((msg: any) => {
         // Check timestamp FIRST - only consider messages newer than connection time
-        const messageTimestamp = msg.date ? msg.date * 1000 : 0; // msg.date is in seconds
+        const messageTimestamp = msg.createdAt ? new Date(msg.createdAt).getTime() : 0;
         if (!messageTimestamp || messageTimestamp <= this.connectionTime) {
             // console.debug(`[Chat Sub] Ignoring historical/old message ID ${msg?.id} (ts: ${messageTimestamp})`);
             // Ensure historical messages are marked processed if encountered *before* connectionTime was set (edge case)
@@ -1136,130 +1014,12 @@ export class HyperfyService extends Service {
         console.info(`[Chat] Found ${newMessagesFound.length} new messages to process.`)
 
         newMessagesFound.forEach(async (msg: any) => {
-          const senderName = msg.from || 'System'
-          const messageBody = msg.body || ''
-          console.info(`[Chat Received] From: ${senderName}, ID: ${msg.id}, Body: "${messageBody}"`)
-
-          // Respond only to messages not from the agent itself
-          if (msg.fromId !== agentPlayerId) {
-              console.info(`[Hyperfy Chat] Processing message from ${senderName}`)
-
-              // First, ensure we register the entity (world, room, sender) in Eliza properly
-              const hyperfyWorldId = createUniqueUuid(this.runtime, 'hyperfy-world') as UUID
-              const elizaRoomId = createUniqueUuid(this.runtime, this._currentWorldId || 'hyperfy-unknown-world')
-              const entityId = createUniqueUuid(this.runtime, msg.fromId.toString()) as UUID
-
-              console.debug(`[Hyperfy Chat] Creating world: ${hyperfyWorldId}`)
-              // Register the world if it doesn't exist
-              await this.runtime.ensureWorldExists({
-                id: hyperfyWorldId,
-                name: 'Hyperfy World',
-                agentId: this.runtime.agentId,
-                serverId: 'hyperfy',
-                metadata: {
-                  type: 'hyperfy',
-                },
-              })
-
-              console.debug(`[Hyperfy Chat] Creating room: ${elizaRoomId}`)
-              // Register the room if it doesn't exist
-              await this.runtime.ensureRoomExists({
-                id: elizaRoomId,
-                name: 'Hyperfy Chat',
-                source: 'hyperfy',
-                type: ChannelType.WORLD,
-                channelId: this._currentWorldId,
-                serverId: 'hyperfy',
-                worldId: hyperfyWorldId,
-              })
-
-              console.debug(`[Hyperfy Chat] Creating entity connection for: ${entityId}`)
-              // Ensure connection for the sender entity
-              await this.runtime.ensureConnection({
-                entityId: entityId,
-                roomId: elizaRoomId,
-                userName: senderName,
-                name: senderName,
-                source: 'hyperfy',
-                channelId: this._currentWorldId,
-                serverId: 'hyperfy',
-                type: ChannelType.WORLD,
-                worldId: hyperfyWorldId,
-              })
-
-              // Create the message memory
-              const messageId = createUniqueUuid(this.runtime, msg.id.toString()) as UUID
-              console.debug(`[Hyperfy Chat] Creating memory: ${messageId}`)
-              const memory: Memory = {
-                id: messageId,
-                entityId: entityId,
-                agentId: this.runtime.agentId,
-                roomId: elizaRoomId,
-                worldId: hyperfyWorldId,
-                content: {
-                  text: messageBody,
-                  source: 'hyperfy',
-                  channelType: ChannelType.WORLD,
-                  metadata: {
-                    hyperfyMessageId: msg.id,
-                    hyperfyFromId: msg.fromId,
-                    hyperfyFromName: senderName,
-                  },
-                },
-                createdAt: Date.now(),
-              }
-
-              // Create a callback function to handle responses
-              const callback: HandlerCallback = async (responseContent: Content): Promise<Memory[]> => {
-                console.info(`[Hyperfy Chat Callback] Received response: ${JSON.stringify(responseContent)}`)
-                if (responseContent.text) {
-                  console.info(`[Hyperfy Chat Response] ${responseContent.text}`)
-                  // Send response back to Hyperfy
-                  this.sendMessage(responseContent.text)
-              }
-                return [];
-              };
-
-              // Ensure the entity actually exists in DB before event emission
-              try {
-                const entity = await this.runtime.getEntityById(entityId)
-                if (!entity) {
-                  console.warn(
-                    `[Hyperfy Chat] Entity ${entityId} not found in database after creation, creating directly`
-                  )
-                  await this.runtime.createEntity({
-                    id: entityId,
-                    names: [senderName],
-                    agentId: this.runtime.agentId,
-                    metadata: {
-                      hyperfy: {
-                        id: msg.fromId,
-                        username: senderName,
-                        name: senderName,
-                      },
-                    },
-                  })
-                }
-              } catch (error) {
-                console.error(`[Hyperfy Chat] Error checking/creating entity: ${error}`)
-              }
-
-              // Emit the MESSAGE_RECEIVED event to trigger the message handler
-              console.info(`[Hyperfy Chat] Emitting MESSAGE_RECEIVED event for message: ${messageId}`)
-              await this.runtime.emitEvent(EventType.MESSAGE_RECEIVED, {
-                runtime: this.runtime,
-                message: memory,
-                callback: callback,
-                source: 'hyperfy',
-              })
-
-              console.info(`[Hyperfy Chat] Successfully emitted event for message: ${messageId}`)
-          }
+          await this.messageManager.handleMessage(msg);
         })
       }
     })
   }
-
+  
   private startSimulation(): void {
     if (this.tickIntervalId) clearTimeout(this.tickIntervalId);
     const tickIntervalMs = 1000 / HYPERFY_TICK_RATE;
@@ -1322,4 +1082,20 @@ export class HyperfyService extends Service {
 
   private startRandomChatting(): void { /* ... existing ... */ }
   private stopRandomChatting(): void { /* ... existing ... */ }
+
+  getEmoteManager() {
+    return this.emoteManager;
+  }
+
+  getBehaviorManager() {
+    return this.behaviorManager;
+  }
+
+  getMessageManager() {
+    return this.messageManager;
+  }
+
+  getVoiceManager() {
+    return this.voiceManager;
+  }
 }

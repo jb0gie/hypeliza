@@ -1,7 +1,12 @@
-import { System } from './hyperfy/core/systems/System.js'
+import { System } from './hyperfy/src/core/systems/System.js'
 import { logger } from '@elizaos/core';
 import * as THREE from 'three';
-import { Vector3Enhanced } from './hyperfy/core/extras/Vector3Enhanced.js'
+import { Vector3Enhanced } from './hyperfy/src/core/extras/Vector3Enhanced.js'
+
+const FORWARD = new THREE.Vector3(0, 0, -1)
+const v1 = new THREE.Vector3()
+const e1 = new THREE.Euler(0, 0, 0, 'YXZ')
+const q1 = new THREE.Quaternion()
 
 // Define Navigation Constants
 const NAVIGATION_TICK_INTERVAL = 100; // ms
@@ -16,6 +21,12 @@ function createButtonState() {
     pressed: false,
     released: false,
   }
+}
+
+class NavigationToken {
+  private _isAborted = false;
+  abort() { this._isAborted = true; }
+  get aborted() { return this._isAborted; }
 }
 
 export class AgentControls extends System {
@@ -51,32 +62,29 @@ export class AgentControls extends System {
   // --- Navigation State --- >
   private _navigationTarget: THREE.Vector3 | null = null;
   private _isNavigating: boolean = false;
-  private _navigationIntervalId: NodeJS.Timeout | null = null;
   private _currentNavKeys: { forward: boolean, backward: boolean, left: boolean, right: boolean } = {
       forward: false, backward: false, left: false, right: false
   };
-  private _stopReason: string | null = null; // Store the reason for stopping
+  private _navigationResolve: (() => void) | null = null;
   // <------------------------
 
-  // --- Random Walk State --- >
-  private _isWalkingRandomly: boolean = false;
-  private _randomWalkIntervalId: NodeJS.Timeout | null = null;
-  private _randomWalkIntervalMs: number = RANDOM_WALK_DEFAULT_INTERVAL;
-  private _randomWalkMaxDistance: number = RANDOM_WALK_DEFAULT_MAX_DISTANCE;
-  // <-------------------------
+  private _currentWalkToken: NavigationToken | null = null;
+  private _isRandomWalking: boolean = false;
 
   constructor(world: any) {
     super(world); // Call base System constructor
 
     const commonKeys = [
       'keyW', 'keyA', 'keyS', 'keyD', 'space', 'shiftLeft', 'shiftRight',
-      'controlLeft', 'keyC', 'keyF', 'keyE', 'arrowUp', 'arrowDown',
+      'controlLeft', 'keyC', 'keyF', 'keyE', 'keyX', 'arrowUp', 'arrowDown',
       'arrowLeft', 'arrowRight', 'touchA', 'touchB', 'xrLeftStick',
       'xrRightStick', 'xrLeftBtn1', 'xrLeftBtn2', 'xrRightBtn1', 'xrRightBtn2',
     ];
     commonKeys.forEach(key => {
       this[key] = createButtonState();
     });
+
+    this.camera = this.createCamera(this);
   }
 
   // Method for the agent script to set a key state
@@ -118,54 +126,78 @@ export class AgentControls extends System {
     // We don't run navigationTick here, it runs on its own interval
   }
 
+  // --- Random Walk Methods --- >
+
+  /**
+   * Starts the agent walking to random nearby points.
+   */
+  public async startRandomWalk(
+    interval: number = RANDOM_WALK_DEFAULT_INTERVAL,
+    maxDistance: number = RANDOM_WALK_DEFAULT_MAX_DISTANCE
+  ) {
+    this.stopRandomWalk(); // cancel if already running
+    this._isRandomWalking = true;
+    logger.info("[Controls] Random walk started.");
+
+    const delay = (ms: number) => new Promise(res => setTimeout(res, ms));
+    const token = new NavigationToken();
+    this._currentWalkToken = token;
+    const walkLoop = async () => {
+      while (this._isRandomWalking && this.world?.entities?.player && !token.aborted && this._currentWalkToken === token) {
+        const pos = this.world.entities.player.base.position;
+        const angle = Math.random() * Math.PI * 2;
+        const radius = Math.random() * maxDistance;
+        const targetX = pos.x + Math.cos(angle) * radius;
+        const targetZ = pos.z + Math.sin(angle) * radius;
+
+        try {
+          await this.startNavigation(targetX, targetZ, token);
+        } catch (e) {
+          logger.warn("[Random Walk] Navigation error:", e);
+        }
+
+        await delay(interval);
+      }
+    };
+
+    walkLoop();
+  }
+
+  /**
+   * Stops the random walk process.
+   */
+  public stopRandomWalk() {
+    this._isRandomWalking = false;
+    this._currentWalkToken?.abort();
+    this._currentWalkToken = null;
+    this.stopNavigation("random walk stopped");
+  }  
+
   // --- Navigation Methods --- >
 
   /**
    * Starts navigating the agent towards the target X, Z coordinates.
    */
-  public navigateTo(x: number, z: number): void {
-    logger.info(`[Controls Navigation] Request to navigate to (${x.toFixed(2)}, ${z.toFixed(2)})`);
-    // --- Add check for player existence early ---
-    if (!this.world?.entities?.player) {
-        logger.error("[Controls Navigation] Cannot navigateTo: Player entity not found.");
-        this.stopNavigation("error - player missing");
-        return;
-    }
-    // -------------------------------------------
-    if (!this._validatePlayerState("navigateTo")) return;
-
-    this.stopNavigation("starting new navigation"); // Stop previous navigation first
-
-    this._navigationTarget = new THREE.Vector3(x, 0, z); // Store target (Y is ignored)
-    this._isNavigating = true;
-    this._stopReason = null; // Clear stop reason
-
-    // Reset internal key tracker
-    this._currentNavKeys = { forward: false, backward: false, left: false, right: false };
-
-    // Start the navigation tick interval
-    if (!this._navigationIntervalId) {
-        this._navigationIntervalId = setInterval(() => this._navigationTick(), NAVIGATION_TICK_INTERVAL);
-        logger.info("[Controls Navigation] Navigation tick interval started.");
-    }
+  public async goto(x: number, z: number): Promise<void> {
+    this.stopRandomWalk();
+    await this.startNavigation(x, z);
   }
 
   /**
    * Stops the current navigation process AND random walk if active.
    */
   public stopNavigation(reason: string = "commanded"): void {
-    let stoppedNav = false;
-    if (this._isNavigating || this._navigationIntervalId) {
+    if (this._isNavigating) {
         logger.info(`[Controls Navigation] Stopping navigation (${reason}). Reason stored.`);
-        this._stopReason = reason; // Store the reason
-        if (this._navigationIntervalId) {
-          clearInterval(this._navigationIntervalId);
-          this._navigationIntervalId = null;
+
+        if (this._navigationResolve) {
+          this._navigationResolve();
+          this._navigationResolve = null;
         }
+
         this._isNavigating = false;
         this._navigationTarget = null;
-        stoppedNav = true;
-
+        
         // Release movement keys
         try {
             this.setKey('keyW', false);
@@ -179,12 +211,54 @@ export class AgentControls extends System {
         }
         this._currentNavKeys = { forward: false, backward: false, left: false, right: false };
     }
-    // Also stop random walk if navigation stopped for a reason other than the random walk itself starting a new leg
-    if (stoppedNav && reason !== "random walk tick") {
-        this.stopRandomWalk("navigation stopped");
-    }
   }
 
+
+  /**
+   * Internal navigation method that moves the agent towards a target (x, z) position.
+   * It sets the player's rotation to face the direction of travel and simulates key presses
+   * (e.g., 'W' for forward movement) until the agent reaches the destination or navigation is stopped.
+   *
+   * This method is isolated and does not handle random walk logic — it's a low-level navigation primitive.
+   * Should be called by `goto` or `startRandomWalk` with an optional NavigationToken to allow early cancellation.
+   */
+  private async startNavigation(x: number, z: number, token?: NavigationToken): Promise<void> {
+    this.stopNavigation("starting new navigation");
+  
+    this._navigationTarget = new THREE.Vector3(x, 0, z);
+    this._isNavigating = true;
+    this._currentNavKeys = { forward: false, backward: false, left: false, right: false };
+  
+    const player = this.world.entities.player;
+    const tickDelay = (ms: number) => new Promise(res => setTimeout(res, ms));
+  
+    while (this._isNavigating && this._navigationTarget && (!token || !token.aborted)) {
+      if (!this._validatePlayerState("startNavigation")) break;
+  
+      const playerPosition = v1.copy(player.base.position);
+      const distanceXZ = playerPosition.clone().setY(0).distanceTo(this._navigationTarget.clone().setY(0));
+  
+      if (distanceXZ <= NAVIGATION_STOP_DISTANCE) {
+        this.stopNavigation("navigateTo finished");
+        break;
+      };
+  
+      const directionWorld = this._navigationTarget.clone().sub(playerPosition).setY(0).normalize();
+      const desiredLook = q1.setFromUnitVectors(FORWARD, directionWorld);
+      player.base.quaternion = desiredLook;
+      const baseRotationY = e1.setFromQuaternion(player.base.quaternion, 'YXZ').y;
+      player.cam.rotation.y = baseRotationY;
+  
+      this.setKey('keyW', true);
+      this.setKey('keyS', false);
+      this.setKey('keyA', false);
+      this.setKey('keyD', false);
+      this.setKey('shiftLeft', false);
+  
+      await tickDelay(NAVIGATION_TICK_INTERVAL);
+    }
+  }
+  
   /**
    * Returns whether the agent is currently navigating towards a target.
    */
@@ -192,189 +266,9 @@ export class AgentControls extends System {
     return this._isNavigating;
   }
 
-  /**
-   * The core navigation logic, executed at intervals.
-   */
-  private _navigationTick(): void {
-    // --- BEGIN DEBUG LOGS ---
-    if (!this._isNavigating || !this._navigationTarget) {
-        // Check if we already logged a stop reason
-        if (this._stopReason) {
-             logger.debug(`[Controls Navigation Tick] Tick skipped (Stopped: ${this._stopReason}). Interval should be clearing.`);
-        } else {
-             logger.warn("[Controls Navigation Tick] Tick skipped (not navigating or no target, no explicit stop reason). Clearing interval.");
-        }
-        if (this._navigationIntervalId) { clearInterval(this._navigationIntervalId); this._navigationIntervalId = null; }
-        // Don't call stopNavigation here to avoid loops, just clear interval
-        return;
-    }
-    // --- Add check for player existence ---
-    if (!this.world?.entities?.player) {
-        logger.error("[Controls Navigation Tick] Cannot tick: Player entity not found.");
-        this.stopNavigation("tick error - player missing");
-        return;
-    }
-    // ------------------------------------
-    if (!this._validatePlayerState("_navigationTick")) {
-        logger.warn("[Controls Navigation Tick] Tick skipped (player state invalid).");
-        this.stopNavigation("tick error - player state invalid");
-        return;
-    }
-    logger.debug(`[Controls Navigation Tick] Tick running. Target: (${this._navigationTarget.x.toFixed(2)}, ${this._navigationTarget.z.toFixed(2)})`);
-    // --- END DEBUG LOGS ---
-
-    // --- Incorporate user's fix: Create new Vec/Quat instances ---
-    const playerPosition = new THREE.Vector3().copy(this.world.entities.player.base.position);
-    const playerQuaternion = new THREE.Quaternion().copy(this.world.entities.player.base.quaternion);
-    logger.debug(`[Controls Navigation Tick] DEBUG: Current Pos: (${playerPosition.x.toFixed(2)}, ${playerPosition.y.toFixed(2)}, ${playerPosition.z.toFixed(2)})`);
-    logger.debug(`[Controls Navigation Tick] DEBUG: Current Quat: (${playerQuaternion.x.toFixed(2)}, ${playerQuaternion.y.toFixed(2)}, ${playerQuaternion.z.toFixed(2)}, ${playerQuaternion.w.toFixed(2)})`);
-    // -----------------------------------------------------------
-
-    // Check distance to target (XZ plane)
-    const distanceXZ = playerPosition.clone().setY(0).distanceTo(this._navigationTarget.clone().setY(0));
-    logger.debug(`[Controls Navigation Tick] DEBUG: Distance to target: ${distanceXZ.toFixed(2)}m`);
-
-    // --- Check if target reached --- >
-    if (distanceXZ <= NAVIGATION_STOP_DISTANCE) {
-      logger.info(`[Controls Navigation Tick] Target reached (distance ${distanceXZ.toFixed(2)} <= ${NAVIGATION_STOP_DISTANCE}).`);
-      this.stopNavigation("reached target"); // Stop everything once target is reached
-      // TODO: Emit navigation completion event?
-      return; // Stop further processing this tick
-    }
-    // <--------------------------------
-
-    // --- Calculate Movement --- >
-    const directionWorld = this._navigationTarget.clone().sub(playerPosition).setY(0).normalize();
-    const forwardWorld = new THREE.Vector3(0, 0, -1).applyQuaternion(playerQuaternion).setY(0).normalize();
-    logger.debug(`[Controls Navigation Tick] DEBUG: Direction Vector: (${directionWorld.x.toFixed(2)}, ${directionWorld.y.toFixed(2)}, ${directionWorld.z.toFixed(2)})`);
-    logger.debug(`[Controls Navigation Tick] DEBUG: Forward Vector: (${forwardWorld.x.toFixed(2)}, ${forwardWorld.y.toFixed(2)}, ${forwardWorld.z.toFixed(2)})`);
-
-    // Check for zero vectors or NaN
-    if (isNaN(forwardWorld.x) || isNaN(forwardWorld.y) || isNaN(forwardWorld.z) || forwardWorld.lengthSq() < 0.001) {
-         logger.warn("[Controls Navigation Tick] Invalid player forward vector. Holding position.");
-         this.setKey('keyW', false); this.setKey('keyA', false); this.setKey('keyD', false); this.setKey('keyS', false);
-         this._currentNavKeys = { forward: false, backward: false, left: false, right: false };
-         return;
-    }
-     if (isNaN(directionWorld.x) || isNaN(directionWorld.y) || isNaN(directionWorld.z) || directionWorld.lengthSq() < 0.001) {
-          logger.warn("[Controls Navigation Tick] Invalid target direction vector (target likely same as current pos). Holding position.");
-          this.setKey('keyW', false); this.setKey('keyA', false); this.setKey('keyD', false); this.setKey('keyS', false);
-          this._currentNavKeys = { forward: false, backward: false, left: false, right: false };
-          // Optionally stop navigation if direction is invalid
-          // this.stopNavigation("invalid direction");
-          return;
-     }
-
-    const angle = forwardWorld.angleTo(directionWorld);
-    const cross = new THREE.Vector3().crossVectors(forwardWorld, directionWorld);
-    const signedAngle = cross.y < 0 ? -angle : angle;
-    logger.debug(`[Controls Navigation Tick] DEBUG: Angle: ${(angle * THREE.MathUtils.RAD2DEG).toFixed(1)} deg, Signed Angle: ${(signedAngle * THREE.MathUtils.RAD2DEG).toFixed(1)} deg, Cross Y: ${cross.y.toFixed(3)}`);
-
-    // --- Determine desired movement ---
-    const forwardThreshold = Math.PI / 18; // ~10 degrees
-    const turnThreshold = Math.PI / 4; // 45 degrees - turn in place if angle > this
-    let desiredKeys = { forward: false, backward: false, left: false, right: false };
-    if (Math.abs(signedAngle) > turnThreshold) {
-      desiredKeys.forward = false;
-      if (signedAngle < 0) { desiredKeys.left = true; } else { desiredKeys.right = true; }
-    }
-    else {
-        desiredKeys.forward = true;
-        if (Math.abs(signedAngle) > forwardThreshold) {
-            if (signedAngle < 0) { desiredKeys.left = true; } else { desiredKeys.right = true; }
-        }
-    }
-    logger.debug(`[Controls Navigation Tick] DEBUG: Desired keys: F:${desiredKeys.forward}, L:${desiredKeys.left}, R:${desiredKeys.right}`);
-    // <--------------------------
-
-    // --- Apply Keys --- >
-    if (desiredKeys.forward !== this._currentNavKeys.forward) { logger.debug(`[Controls Navigation Tick] DEBUG: Setting keyW to ${desiredKeys.forward}`); this.setKey('keyW', desiredKeys.forward); this._currentNavKeys.forward = desiredKeys.forward; }
-    if (desiredKeys.left !== this._currentNavKeys.left) { logger.debug(`[Controls Navigation Tick] DEBUG: Setting keyA to ${desiredKeys.left}`); this.setKey('keyA', desiredKeys.left); this._currentNavKeys.left = desiredKeys.left; }
-    if (desiredKeys.right !== this._currentNavKeys.right) { logger.debug(`[Controls Navigation Tick] DEBUG: Setting keyD to ${desiredKeys.right}`); this.setKey('keyD', desiredKeys.right); this._currentNavKeys.right = desiredKeys.right; }
-    if (this._currentNavKeys.backward) { logger.debug(`[Controls Navigation Tick] DEBUG: Setting keyS to false`); this.setKey('keyS', false); this._currentNavKeys.backward = false; }
-    this.setKey('shiftLeft', false);
-    // <-------------------
-  }
-
-  // --- Random Walk Methods --- >
-
-  /**
-   * Starts the agent walking to random nearby points.
-   */
-  public startRandomWalk(
-      intervalMs: number = RANDOM_WALK_DEFAULT_INTERVAL,
-      maxDistance: number = RANDOM_WALK_DEFAULT_MAX_DISTANCE
-  ): void {
-      if (this._isWalkingRandomly) {
-          logger.warn('[Controls Random Walk] Already walking randomly. Restarting with new parameters.');
-          this.stopRandomWalk("restarting"); // Stop existing random walk first
-      }
-
-      logger.info(`[Controls Random Walk] Starting. Interval: ${intervalMs}ms, Max Distance: ${maxDistance}m`);
-      this._isWalkingRandomly = true;
-      this._randomWalkIntervalMs = intervalMs;
-      this._randomWalkMaxDistance = maxDistance;
-
-      // Start the first leg shortly
-      setTimeout(() => this._randomWalkTick(), 100);
-
-      // Set interval for subsequent legs
-      this._randomWalkIntervalId = setInterval(() => this._randomWalkTick(), this._randomWalkIntervalMs);
-  }
-
-  /**
-   * Stops the random walk process.
-   */
-  public stopRandomWalk(reason: string = "commanded"): void {
-      if (!this._isWalkingRandomly && !this._randomWalkIntervalId) {
-          return; // Nothing to stop
-      }
-      logger.info(`[Controls Random Walk] Stopping (${reason}).`);
-      if (this._randomWalkIntervalId) {
-          clearInterval(this._randomWalkIntervalId);
-          this._randomWalkIntervalId = null;
-      }
-      this._isWalkingRandomly = false;
-
-      // Also stop any current navigation leg initiated by the random walk
-      // Avoid loop if stopNavigation called us
-      if (reason !== "navigation stopped") {
-          this.stopNavigation("random walk stopped");
-      }
-  }
-
-  /**
-   * Returns whether the agent is currently walking randomly.
-   */
   public getIsWalkingRandomly(): boolean {
-      return this._isWalkingRandomly;
+    return this._isRandomWalking;
   }
-
-  /**
-   * The core random walk logic, executed at intervals.
-   */
-  private _randomWalkTick(): void {
-      if (!this._isWalkingRandomly) return; // Stop if flag was turned off
-      if (!this._validatePlayerState("_randomWalkTick")) {
-         this.stopRandomWalk("tick error - player state invalid"); // Stop the random walk itself
-         return;
-      }
-
-      const currentPos = this.world.entities.player.base.position as THREE.Vector3;
-
-      // Generate random offset
-      const randomAngle = Math.random() * Math.PI * 2;
-      const randomDistance = Math.random() * this._randomWalkMaxDistance;
-      const offsetX = Math.cos(randomAngle) * randomDistance;
-      const offsetZ = Math.sin(randomAngle) * randomDistance;
-      const targetX = currentPos.x + offsetX;
-      const targetZ = currentPos.z + offsetZ;
-
-      logger.info(`[Controls Random Walk Tick] New target: (${targetX.toFixed(2)}, ${targetZ.toFixed(2)})`);
-      // Call navigateTo, which will handle stopping the previous leg
-      this.navigateTo(targetX, targetZ);
-  }
-  // <-------------------------
 
   /** Helper to check if player and base position/quaternion are valid */
   private _validatePlayerState(caller: string): boolean {
@@ -415,6 +309,32 @@ export class AgentControls extends System {
        logger.debug(`[Controls ${caller}] Player state validated successfully.`);
        // ---------------------
        return true;
+  }
+
+  createCamera(self) {
+    function bindRotations(quaternion, euler) {
+      euler._onChange(() => {
+        quaternion.setFromEuler(euler, false)
+      })
+      quaternion._onChange(() => {
+        euler.setFromQuaternion(quaternion, undefined, false)
+      })
+    }
+    const world = self.world;
+    const position = new THREE.Vector3().copy(world.rig?.position || new THREE.Vector3());
+    const quaternion = new THREE.Quaternion().copy(world.rig?.quaternion || new THREE.Quaternion());
+    const rotation = new THREE.Euler(0, 0, 0, 'YXZ').copy(world.rig?.rotation || new THREE.Euler());
+    bindRotations(quaternion, rotation); // You already import this
+    const zoom = world.camera?.position?.z ?? 10;
+  
+    return {
+      $camera: true,
+      position,
+      quaternion,
+      rotation,
+      zoom,
+      write: false,
+    };
   }
 
   // Dummy methods

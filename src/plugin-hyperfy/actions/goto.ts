@@ -17,9 +17,15 @@ import { AgentControls } from '../controls'; // Import AgentControls type
 
 // Define a simple template for entity extraction
 const entityExtractionTemplate = `
-# Task: Identify the target entity ID based on the user message and the list of entities.
+# Task: Identify the target Hyperfy Entity ID based on the recent Conversation Messages and the current Hyperfy World State.
+# This request may come from an automatic behavior loop — not necessarily a user message — so do NOT assume the last message contains a command or instruction.
+# You must examine the overall conversation context and determine whether {{agentName}} has a meaningful reason to go to a specific entity.
+# Use only the Hyperfy Entity IDs listed in the provided Hyperfy World State — not person IDs or names.
+
 {{providers}}
-# Instructions: Examine the user message: "{{messageText}}". Identify the entity ID the user wants to navigate to from the list of entities provided in the context. Respond with only the entity ID.
+
+# Instructions:
+You are {{agentName}}. Carefully review the recent messages and the Hyperfy world state. Decide if there is a valid reason — based on either recent user interaction or the general context — to navigate toward one of the listed entities.
 
 Response format should be a valid JSON block like this:
 \`\`\`json
@@ -45,7 +51,7 @@ export const hyperfyGotoEntityAction: Action = {
       message: Memory,
       _state: State,
       options: { entityId?: string },
-      callback: HandlerCallback
+      callback: HandlerCallback,
     ) => {
       const service = runtime.getService<HyperfyService>(HyperfyService.serviceType);
       const world = service?.getWorld(); // Use the getter
@@ -64,14 +70,17 @@ export const hyperfyGotoEntityAction: Action = {
           logger.info('[GOTO Action] No entityId in options, attempting extraction from message...');
           try {
               // Compose state including entities provider
-              const extractionState = await runtime.composeState(message, ['ENTITIES', 'RECENT_MESSAGES']);
+              const extractionState = await runtime.composeState(message, [
+                'HYPERFY_WORLD_STATE', 
+                'RECENT_MESSAGES'
+              ]);
 
               const prompt = composePromptFromState({
                   state: extractionState,
                   template: entityExtractionTemplate,
               });
 
-              console.log("prompt", prompt);
+              // console.log("prompt", prompt);
 
               // Use OBJECT_SMALL model for structured response
               const response = await runtime.useModel(ModelType.OBJECT_SMALL, { prompt });
@@ -107,25 +116,22 @@ export const hyperfyGotoEntityAction: Action = {
             return;
         }
 
-        // Stop any previous movement first
-        controls.stopNavigation("goto action request");
-
         // Tell the controls system to start navigating to the single target
         const targetName = service.getEntityName(targetEntityId);
         logger.info(`HYPERFY_GOTO_ENTITY: Requesting navigation via controls to entity ${targetName || targetEntityId} at (${targetPosition.x.toFixed(2)}, ${targetPosition.z.toFixed(2)})`);
-        controls.navigateTo(targetPosition.x, targetPosition.z); // Use controls method
+        controls.goto(targetPosition.x, targetPosition.z); // Use controls method
 
-        // Provide initial confirmation
-        await callback({
-           text: `Navigating towards ${targetName || `entity ${targetEntityId}`}...`,
-           actions: ['HYPERFY_GOTO_ENTITY'],
-           source: 'hyperfy',
-           metadata: {
-               targetEntityId: targetEntityId,
-               targetPosition: targetPosition.toArray(),
-               status: 'navigation_started'
-           }
-        });
+        // // Provide initial confirmation
+        // await callback({
+        //    text: `Navigating towards ${targetName || `entity ${targetEntityId}`}...`,
+        //    actions: ['HYPERFY_GOTO_ENTITY'],
+        //    source: 'hyperfy',
+        //    metadata: {
+        //        targetEntityId: targetEntityId,
+        //        targetPosition: targetPosition.toArray(),
+        //        status: 'navigation_started'
+        //    }
+        // });
 
       } catch (error: any) {
         logger.error(`Error during HYPERFY_GOTO_ENTITY for ID ${targetEntityId}:`, error);

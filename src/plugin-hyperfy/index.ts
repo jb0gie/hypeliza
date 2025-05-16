@@ -9,10 +9,12 @@ import { HyperfyService } from './service';
 import { z } from 'zod';
 import { hyperfyChatAction } from './actions/chat';
 import { hyperfyGotoEntityAction } from './actions/goto';
-import { hyperfyUseNearestObjectAction } from './actions/use';
+import { hyperfyUseItemAction } from './actions/use';
+import { hyperfyUnuseItemAction } from './actions/unuse';
 import { hyperfyStopMovingAction } from './actions/stop';
 import { hyperfyWalkRandomlyAction } from './actions/walk_randomly';
 import { hyperfyProvider } from './providers/world';
+import { hyperfyEmoteProvider } from './providers/emote';
 
 // --- Hardcoded values matching agent/index.mjs ---
 const HYPERFY_WS_URL = process.env.WS_URL || 'wss://chill.hyperfy.xyz/ws'
@@ -143,12 +145,14 @@ export const hyperfyPlugin: Plugin = {
   actions: [
       hyperfyChatAction,
       hyperfyGotoEntityAction,
-      hyperfyUseNearestObjectAction,
+      hyperfyUseItemAction,
+      hyperfyUnuseItemAction,
       hyperfyStopMovingAction,
       hyperfyWalkRandomlyAction
   ],
   providers: [
-      hyperfyProvider // Register the Hyperfy provider
+      hyperfyProvider, // Register the Hyperfy provider
+      hyperfyEmoteProvider
   ],
 };
 

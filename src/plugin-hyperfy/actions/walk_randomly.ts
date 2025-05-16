@@ -11,8 +11,8 @@ import { AgentControls } from '../controls'; // Still need type for casting
 import { HyperfyService } from '../service';
 
 // Restore constants for default values
-const RANDOM_WALK_DEFAULT_INTERVAL = 5000; // ms (5 seconds)
-const RANDOM_WALK_DEFAULT_MAX_DISTANCE = 7; // meters
+const RANDOM_WALK_DEFAULT_INTERVAL = 4000; // ms (4 seconds)
+const RANDOM_WALK_DEFAULT_MAX_DISTANCE = 30; // meters
 
 // State management is now in AgentControls
 
@@ -30,7 +30,7 @@ export const hyperfyWalkRandomlyAction: Action = {
       _message: Memory,
       _state: State,
       options: { interval?: number, distance?: number, command?: 'start' | 'stop' }, // Reverted options
-      callback: HandlerCallback
+      callback: HandlerCallback,
     ) => {
       const service = runtime.getService<HyperfyService>(HyperfyService.serviceType);
       const world = service?.getWorld();
@@ -56,21 +56,21 @@ export const hyperfyWalkRandomlyAction: Action = {
 
       if (command === 'stop') {
           if (controls.getIsWalkingRandomly()) { // Use correct check
-               controls.stopRandomWalk("action commanded stop"); // Call correct stop method
-               await callback({ text: "Stopped wandering.", actions: ['HYPERFY_WALK_RANDOMLY'], source: 'hyperfy', metadata: { status: 'stopped' } });
+               controls.stopRandomWalk(); // Call correct stop method
+              //  await callback({ text: "Stopped wandering.", actions: ['HYPERFY_WALK_RANDOMLY'], source: 'hyperfy', metadata: { status: 'stopped' } });
           } else {
-               await callback({ text: "Was not wandering.", source: 'hyperfy' });
+              //  await callback({ text: "Was not wandering.", source: 'hyperfy' });
           }
       } else { // command === 'start'
           // Call startRandomWalk with calculated interval and distance
           controls.startRandomWalk(intervalMs, maxDistance);
 
-          await callback({
-             text: `Starting to wander randomly... (New target every ~${(intervalMs / 1000).toFixed(1)}s)`,
-             actions: ['HYPERFY_WALK_RANDOMLY'],
-             source: 'hyperfy',
-             metadata: { status: 'started', intervalMs: intervalMs, maxDistance: maxDistance }
-          });
+          // await callback({
+          //    text: `Starting to wander randomly... (New target every ~${(intervalMs / 1000).toFixed(1)}s)`,
+          //    actions: ['HYPERFY_WALK_RANDOMLY'],
+          //    source: 'hyperfy',
+          //    metadata: { status: 'started', intervalMs: intervalMs, maxDistance: maxDistance }
+          // });
       }
     },
      examples: [
