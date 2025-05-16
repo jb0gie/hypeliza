@@ -11,15 +11,7 @@ export class AgentActions extends System {
   constructor(world: any) {
     super(world);
     this.nodes = [];
-
-    setTimeout(() => {
- const control = this.world.controls;
-    console.log("keyX", control.keyX)
-    }, 5000)
-   
   }
-
-  start() {}
 
   register(node: ActionNode) {
     this.nodes.push(node)
@@ -92,6 +84,7 @@ export class AgentActions extends System {
     const control = this.world.controls;
     control.setKey('keyX', true);
     control.keyX.pressed = true;
+    control.keyX.onPress?.();
   
     if (typeof this.currentNode._onCancel === 'function') {
       this.currentNode._onCancel();
@@ -100,13 +93,14 @@ export class AgentActions extends System {
     setTimeout(() => {
       control.setKey('keyX', false);
       control.keyX.released = false;
-      control.keyX.onRelease();
+      control.keyX.onRelease?.();
       this.currentNode = null;
     }, 500);
   }
   
   // Framework stubs
   // init() {}
+  start() {}
   preTick() {}
   preFixedUpdate() {}
   fixedUpdate() {}
