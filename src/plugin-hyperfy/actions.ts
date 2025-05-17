@@ -15,8 +15,6 @@ export class AgentActions extends System {
 
   register(node: ActionNode) {
     this.nodes.push(node)
-    console.log(node)
-    console.log("node.worldPos: ", node.worldPos, node.ctx.entity.root.position)
   }
 
   unregister(node: ActionNode) {
