@@ -22,7 +22,7 @@ ${HYPERFY_ACTIONS.map(
 
 <keys>
 "thought" should be a short description of what the agent is thinking about and planning.
-"actions" should be a comma-separated list of the actions {{agentName}} plans to take based on the thought (if none, use IGNORE, if simply responding with text, use REPLY)
+"actions" should be a comma-separated list of the actions {{agentName}} plans to take based on the thought. Only use actions from the **Available Actions** list above. (if none, use IGNORE, if simply responding with text, use REPLY)
 "emote" should be exactly one emote {{agentName}} will play to express the intent or emotion behind the response (e.g. "crying", "wave"). Leave this blank if no emote fits.
 "text" should be included **only if** REPLY is selected as one of the actions. Leave this blank otherwise.
 </keys>
@@ -68,7 +68,7 @@ For the emote:
 
 <keys>
 "thought" should be a short description of what the agent is thinking about and planning.
-"actions" should be a comma-separated list of the actions {{agentName}} plans to take based on the thought (if none, use IGNORE, if simply responding with text, use REPLY)
+"actions" should be a comma-separated list of the actions {{agentName}} plans to take based on the thought. Only use actions from the **Available Actions** list above. (if none, use IGNORE, if simply responding with text, use REPLY)
 "providers" should be an optional comma-separated list of the providers that {{agentName}} will use to have the right context for responding and acting
 "evaluators" should be an optional comma-separated list of the evaluators that {{agentName}} will use to evaluate the conversation after responding
 "text" should be the text of the next message for {{agentName}} which they will send to the conversation.
