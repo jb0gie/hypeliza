@@ -7,7 +7,7 @@ import {
     logger
   } from '@elizaos/core';
   import { HyperfyService } from '../service';
-  import { AgentActions } from '../actions';
+  import { AgentActions } from '../systems/actions';
   
   export const hyperfyUnuseItemAction: Action = {
     name: 'HYPERFY_UNUSE_ITEM',

@@ -1,6 +1,6 @@
 import { ChannelType, Content, HandlerCallback, IAgentRuntime, Memory, ModelType, composePromptFromState, createUniqueUuid, logger, parseKeyValueXml } from "@elizaos/core";
-import { HyperfyService } from "./service";
-import { autoTemplate } from "./templates";
+import { HyperfyService } from "../service";
+import { autoTemplate } from "../templates";
 import { agentActivityLock } from "./guards";
 
 const TIME_INTERVAL_MIN = 15000; // 15 seconds

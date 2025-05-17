@@ -11,7 +11,7 @@ import {
     type EventHandler
 } from '@elizaos/core';
 import { HyperfyService } from '../service';
-import { AgentControls } from '../controls'; // Import AgentControls type
+import { AgentControls } from '../systems/controls'; // Import AgentControls type
 // Import THREE types if needed, e.g., for metadata typing
 // import type * as THREE from 'three';
 
