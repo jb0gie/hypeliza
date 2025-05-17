@@ -76,6 +76,7 @@ export class BehaviorManager {
     }
 
     const service = this.getService();
+    const world = service.getWorld();
     const _currentWorldId = service.currentWorldId;
     
     const elizaRoomId = createUniqueUuid(this.runtime, _currentWorldId || 'hyperfy-unknown-world')
@@ -127,6 +128,39 @@ export class BehaviorManager {
       entityId: createUniqueUuid(this.runtime, this.runtime.agentId),
       roomId: elizaRoomId,
     };
+
+    await this.runtime.ensureWorldExists({
+      id: _currentWorldId,
+      name: 'Hyperfy World',
+      agentId: this.runtime.agentId,
+      serverId: 'hyperfy',
+      metadata: {
+        type: 'hyperfy',
+      },
+    })
+
+    await this.runtime.ensureRoomExists({
+      id: elizaRoomId,
+      name: 'Hyperfy Chat',
+      source: 'hyperfy',
+      type: ChannelType.WORLD,
+      channelId: _currentWorldId,
+      serverId: 'hyperfy',
+      worldId: _currentWorldId,
+    })
+
+    const name = world.entities.player.data.name;
+    await this.runtime.ensureConnection({
+      entityId: entityId,
+      roomId: elizaRoomId,
+      userName: name,
+      name,
+      source: 'hyperfy',
+      channelId: _currentWorldId,
+      serverId: 'hyperfy',
+      type: ChannelType.WORLD,
+      worldId: _currentWorldId,
+    })
 
     const callback: HandlerCallback = async (responseContent: Content): Promise<Memory[]> => {
       console.info(`[Hyperfy Auto Callback] Received response: ${JSON.stringify(responseContent)}`)
