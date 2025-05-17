@@ -73,7 +73,7 @@ export const hyperfyGotoEntityAction: Action = {
               const extractionState = await runtime.composeState(message, [
                 'HYPERFY_WORLD_STATE', 
                 'RECENT_MESSAGES'
-              ]);
+              ], true);
 
               const prompt = composePromptFromState({
                   state: extractionState,

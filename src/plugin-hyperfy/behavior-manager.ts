@@ -101,7 +101,8 @@ export class BehaviorManager {
         'CHARACTER',
         'HYPERFY_WORLD_STATE',
         'HYPERFY_EMOTE_LIST',
-      ]
+      ],
+      true
     );
 
     const responsePrompt = composePromptFromState({ state, template: autoTemplate(recentMessages) });

@@ -4,6 +4,5 @@ export { characterProvider } from './character';
 export { choiceProvider } from './choice';
 export { entitiesProvider } from './entities';
 export { providersProvider } from './providers';
-export { settingsProvider } from './settings';
 export { timeProvider } from './time';
 export { worldProvider } from './world';

@@ -63,7 +63,7 @@ export const hyperfyUseItemAction: Action = {
     if (!targetEntityId) {
       logger.info('[USE ITEM] No entityId provided, attempting LLM extraction...');
       try {
-        const useState = await runtime.composeState(message, ['HYPERFY_WORLD_STATE', 'RECENT_MESSAGES']);
+        const useState = await runtime.composeState(message, ['HYPERFY_WORLD_STATE', 'RECENT_MESSAGES'], true);
         const prompt = composePromptFromState({ state: useState, template: useItemTemplate });
         const response = await runtime.useModel(ModelType.OBJECT_SMALL, { prompt });
 
