@@ -12,7 +12,7 @@ import {
   type ProjectAgent,
 } from '@elizaos/core';
 import hyperfyPlugin from './plugin-hyperfy';
-import bootstrapPlugin from './plugin-bootstrap';
+import bootstrapPlugin from './plugin-bootstrap/src';
 
 /**
  * Represents the default character (Eliza) with her specific attributes and behaviors.
