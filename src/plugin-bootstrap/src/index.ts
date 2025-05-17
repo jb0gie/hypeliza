@@ -648,6 +648,7 @@ export const bootstrapPlugin: Plugin = {
     providers.actionsProvider,
     providers.characterProvider,
     providers.worldProvider,
+    providers.recentMessagesProvider,
   ]
 };
 

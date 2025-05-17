@@ -6,3 +6,4 @@ export { entitiesProvider } from './entities';
 export { providersProvider } from './providers';
 export { timeProvider } from './time';
 export { worldProvider } from './world';
+export { recentMessagesProvider } from './recentMessages';
