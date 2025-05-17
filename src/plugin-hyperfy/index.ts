@@ -7,7 +7,7 @@ import {
 } from '@elizaos/core';
 import { HyperfyService } from './service';
 import { z } from 'zod';
-import { hyperfyChatAction } from './actions/chat';
+// import { hyperfyChatAction } from './actions/chat';
 import { hyperfyGotoEntityAction } from './actions/goto';
 import { hyperfyUseItemAction } from './actions/use';
 import { hyperfyUnuseItemAction } from './actions/unuse';
@@ -143,7 +143,7 @@ export const hyperfyPlugin: Plugin = {
       HyperfyService // Register the Hyperfy service
   ],
   actions: [
-      hyperfyChatAction,
+      // hyperfyChatAction,
       hyperfyGotoEntityAction,
       hyperfyUseItemAction,
       hyperfyUnuseItemAction,

@@ -9,8 +9,8 @@ import {
   ModelType
 } from '@elizaos/core';
 import { HyperfyService } from '../service';
-import { AgentActions } from '../actions';
-import { AgentControls } from '../controls';
+import { AgentActions } from '../systems/actions';
+import { AgentControls } from '../systems/controls';
 
 // Template to extract entity to interact with
 const useItemTemplate = `

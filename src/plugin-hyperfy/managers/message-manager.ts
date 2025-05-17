@@ -1,7 +1,7 @@
 import { ChannelType, Content, EventType, HandlerCallback, IAgentRuntime, Memory, UUID, createUniqueUuid, formatMessages, getEntityDetails } from "@elizaos/core";
-import { HyperfyService } from "./service";
+import { HyperfyService } from "../service";
 import { agentActivityLock } from "./guards";
-import { messageHandlerTemplate } from "./templates";
+import { messageHandlerTemplate } from "../templates";
 
 export class MessageManager {
   private runtime: IAgentRuntime;
