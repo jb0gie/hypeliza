@@ -67,7 +67,7 @@ export class AgentLiveKit extends System {
         for await (const frame of stream) {
           if (!track.sid) return;
           const int16 = frame.data;
-          this.emit('audio', {
+          (this as any).emit('audio', {
             participant: participant.identity,
             buffer: Buffer.from(int16.buffer),
           });

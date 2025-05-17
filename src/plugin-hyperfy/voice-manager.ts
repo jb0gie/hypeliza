@@ -166,6 +166,7 @@ export class VoiceManager {
       const type = ChannelType.WORLD;
 
       await this.runtime.ensureConnection({
+        worldId: _currentWorldId,
         entityId: uniqueEntityId,
         roomId,
         userName,
