@@ -1,4 +1,4 @@
-import { System } from './hyperfy/src/core/systems/System';
+import { System } from '../hyperfy/src/core/systems/System';
 import * as THREE from 'three'
 
 interface ActionNode extends THREE.Object3D {

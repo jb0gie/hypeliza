@@ -1,10 +1,10 @@
 import fs from 'fs/promises'
 import path from 'path'
-import { EMOTES_LIST } from './constants.js'
-import { Emotes } from './hyperfy/src/core/extras/playerEmotes.js'
-import { hashFileBuffer } from './utils'
+import { EMOTES_LIST } from '../constants.js'
+import { Emotes } from '../hyperfy/src/core/extras/playerEmotes.js'
+import { hashFileBuffer } from '../utils'
 import { IAgentRuntime, logger } from '@elizaos/core'
-import { HyperfyService } from './service.js'
+import { HyperfyService } from '../service.js'
 
 export class EmoteManager {
   private emoteHashMap: Map<string, string>

@@ -1,5 +1,5 @@
 import { isString } from 'lodash-es'
-import { Node } from './hyperfy/src/core/nodes/Node'
+import { Node } from '../hyperfy/src/core/nodes/Node'
 import * as THREE from 'three'
 
 const defaults = {

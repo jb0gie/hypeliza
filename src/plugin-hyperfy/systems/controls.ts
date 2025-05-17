@@ -1,7 +1,7 @@
-import { System } from './hyperfy/src/core/systems/System.js'
+import { System } from '../hyperfy/src/core/systems/System.js'
 import { logger } from '@elizaos/core';
 import * as THREE from 'three';
-import { Vector3Enhanced } from './hyperfy/src/core/extras/Vector3Enhanced.js'
+import { Vector3Enhanced } from '../hyperfy/src/core/extras/Vector3Enhanced.js'
 
 const FORWARD = new THREE.Vector3(0, 0, -1)
 const v1 = new THREE.Vector3()

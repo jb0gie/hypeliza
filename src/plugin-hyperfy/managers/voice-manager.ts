@@ -1,6 +1,6 @@
 import { ChannelType, Content, HandlerCallback, IAgentRuntime, Memory, ModelType, UUID, createUniqueUuid, getWavHeader, logger } from "@elizaos/core";
-import { HyperfyService } from "./service";
-import { convertToAudioBuffer } from "./utils";
+import { HyperfyService } from "../service";
+import { convertToAudioBuffer } from "../utils";
 import { agentActivityLock } from "./guards";
 
 type LiveKitAudioData = {

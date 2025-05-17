@@ -7,7 +7,7 @@ import {
     type State
 } from '@elizaos/core';
 // No longer need THREE here
-import { AgentControls } from '../controls'; // Still need type for casting
+import { AgentControls } from '../systems/controls'; // Still need type for casting
 import { HyperfyService } from '../service';
 
 // Restore constants for default values

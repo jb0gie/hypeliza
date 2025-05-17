@@ -10,7 +10,7 @@ import {
   TrackKind,
   AudioStream
 } from '@livekit/rtc-node';
-import { System } from './hyperfy/src/core/systems/System';
+import { System } from '../hyperfy/src/core/systems/System';
 import { spawn } from 'node:child_process';
 
 export interface LiveKitInitOptions {
