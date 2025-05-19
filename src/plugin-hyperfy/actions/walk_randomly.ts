@@ -65,12 +65,12 @@ export const hyperfyWalkRandomlyAction: Action = {
           // Call startRandomWalk with calculated interval and distance
           controls.startRandomWalk(intervalMs, maxDistance);
 
-          // await callback({
-          //    text: `Starting to wander randomly... (New target every ~${(intervalMs / 1000).toFixed(1)}s)`,
-          //    actions: ['HYPERFY_WALK_RANDOMLY'],
-          //    source: 'hyperfy',
-          //    metadata: { status: 'started', intervalMs: intervalMs, maxDistance: maxDistance }
-          // });
+          await callback({
+             text: ``,
+             actions: ['HYPERFY_WALK_RANDOMLY'],
+             source: 'hyperfy',
+             metadata: { status: 'started', intervalMs: intervalMs, maxDistance: maxDistance }
+          });
       }
     },
      examples: [
