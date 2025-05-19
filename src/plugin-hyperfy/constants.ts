@@ -102,6 +102,14 @@ export const HYPERFY_ACTIONS = [
     description: 'Choose this when the conversation is quiet or winding down, and {{agentName}} wants to stay present without speaking. Use it based on the current situation and conversation vibe — when there’s nothing urgent to say or do, but movement feels more natural than being idle.'
   },
   {
+    name: 'HYPERFY_USE_ITEM',
+    description: 'Choose this when {{agentName}} decides to approach and interact with a nearby interactive object — such as picking something up, or activating a device. Use this when the item is relevant, nearby, and adds meaning or immersion to the current moment.'
+  },
+  {
+    name: 'HYPERFY_AMBIENT_SPEECH',
+    description: 'Choose this when {{agentName}} wants to make a light, self-directed observation or ambient remark — not directly addressing a user. This can include thoughts about the environment, nearby objects, or subtle reactions to what’s happening. Use this to add life and presence to the scene without expecting a reply.'
+  },
+  {
     name: 'REPLY',
     description: '**ABSOLUTELY DO NOT** repeat yourself. {{agentName}} must thoroughly review the recent Conversation Messages and ensure the response is meaningfully different. If the message is even slightly similar to a recent reply, do **NOT** respond. Only choose this action if you are adding **new value, insight, or context** — otherwise, skip it.'
   },  

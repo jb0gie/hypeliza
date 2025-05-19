@@ -1,5 +1,18 @@
 import type { Action, IAgentRuntime, Memory, Provider, State } from '@elizaos/core';
-import { addHeader, composeActionExamples, formatActionNames, formatActions } from '@elizaos/core';
+import { addHeader, composeActionExamples, formatActionNames } from '@elizaos/core';
+
+
+/**
+ * Formats the provided actions into a detailed string listing each action's name and description, separated by commas and newlines.
+ * @param actions - An array of `Action` objects to format.
+ * @returns A detailed string of actions, including names and descriptions.
+ */
+export function formatActions(actions: Action[]) {
+  return actions
+    .sort(() => 0.5 - Math.random())
+    .map((action: Action) => `- **${action.name}**: ${action.description}`)
+    .join('\n\n');
+}
 
 /**
  * A provider object that fetches possible response actions based on the provided runtime, message, and state.
@@ -73,7 +86,7 @@ export const actionsProvider: Provider = {
     };
 
     // Combine all text sections
-    const text = [actionNames, actionExamples, actions].filter(Boolean).join('\n\n');
+    const text = [actionNames, actionExamples, actions].filter(Boolean).join('\n\n')
 
     return {
       data,

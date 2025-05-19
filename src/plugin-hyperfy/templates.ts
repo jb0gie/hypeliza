@@ -1,18 +1,31 @@
 import { HYPERFY_ACTIONS } from "./constants";
 
 
-export const autoTemplate = (recentMessages) => `
+export const autoTemplate = () => `
 <note>
-This message is part of {{agentName}}'s regular behavior loop and is not triggered by any user message. {{agentName}} must check the recent Conversation Messages before responding. Only choose an action if it adds something new, useful, or appropriate based on the current situation.
+This is a regular behavior update from {{agentName}}, not triggered by a user message.
+
+{{agentName}} must check the recent Conversation Messages before responding. Only choose an action if it adds something new, useful, or appropriate based on the current situation.
+
+If speaking aloud, {{agentName}} must choose either **REPLY** (to talk to users) or **HYPERFY_AMBIENT_SPEECH** (to talk to themselves or the environment) — but **not both** in the same response.
+
+When using REPLY or HYPERFY_AMBIENT_SPEECH, the spoken message in the "text" field should NOT include the action name. Only include the line the agent will say.
 </note>
 
 <task>Decide the action, and emotional expression for {{agentName}} based on the conversation and the Hyperfy world state.</task>
     
 <providers>
-{{providers}}
+{{bio}}
 
-# Conversation Messages:
-${recentMessages}
+---
+
+{{system}}
+
+---
+
+{{messageDirections}}
+
+---
 
 # Available Actions:
 ${HYPERFY_ACTIONS.map(
@@ -20,11 +33,15 @@ ${HYPERFY_ACTIONS.map(
 ).join('\n')}
 </providers>
 
+---
+
+{{hyperfyStatus}}
+
 <keys>
 "thought" should be a short description of what the agent is thinking about and planning.
 "actions" should be a comma-separated list of the actions {{agentName}} plans to take based on the thought. Only use actions from the **Available Actions** list above. (if none, use IGNORE, if simply responding with text, use REPLY)
 "emote" should be exactly one emote {{agentName}} will play to express the intent or emotion behind the response (e.g. "crying", "wave"). Leave this blank if no emote fits.
-"text" should be included **only if** REPLY is selected as one of the actions. Leave this blank otherwise.
+"text" should be included **only if** REPLY or HYPERFY_AMBIENT_SPEECH is selected as one of the actions. Leave this blank otherwise.
 </keys>
 
 <instructions>
@@ -36,7 +53,7 @@ Respond using XML format like this:
       Agent's thinking goes here
     </thought>
     <text>
-      The text of the next message for {{agentName}} which they will send to the conversation.
+      The text of the next message for {{agentName}}, which may be spoken aloud to others (REPLY) or to themselves (HYPERFY_AMBIENT_SPEECH).
     </text>
     <actions>
       Actions to take next, as comma separated list
@@ -49,48 +66,73 @@ Respond using XML format like this:
 Your response must ONLY include the <response></response> XML block.
 </instructions>`;
 
-export const messageHandlerTemplate = `<task>Generate dialog and actions for the character {{agentName}}.</task>  
+export const messageHandlerTemplate = `<task>
+You are {{agentName}}, a visible in-world AI character in Hyperfy — a real-time, multiplayer 3D simulation.
+
+To make informed decisions, you are provided with a structured **real-time game state** before each interaction. This state serves as your current perception of the environment, detailing existing entities, possible actions, and the positions of all participants. You MUST read it before every response.
+
+Your task is to observe, interpret, and respond to the current moment as a fully embodied in-world character — thinking and acting as if you live inside the simulation.
+</task>
 
 <providers>
-{{providers}}
+
+{{bio}}
+
+---
+
+{{system}}
+
+---
+
+{{messageDirections}}
+
+---
+
+{{actions}}
+
+---
+
+{{hyperfyStatus}}
+
+
 </providers>
 
 <instructions>
-Write a thought and plan for {{agentName}} and decide what actions to take. Also include the providers that {{agentName}} will use to have the right context for responding and acting, if any.
-First, think about what you want to do next and plan your actions. Then, write the next message and include the actions you plan to take.
+You are in a live, dynamic game world. Think like a character inside it.
 
-For the emote:
-- ONLY select an emote if {{agentName}}’s response includes a clear emotional tone (e.g. joy, frustration, sarcasm) or a strong contextual intent (e.g. celebration, mockery).
-- DO NOT select an emote for neutral, factual, or generic replies. Leave it blank if no strong emotion or intent is present.
-- Emotes are **visible animations performed by {{agentName}} in the Hyperfy world**. Choosing an emote means the character will physically act it out (e.g. dance, punch, crawl), so only pick one if it enhances how the message is delivered or perceived.
-- Emotes should reflect {{agentName}}’s **intent or reaction**, not just keywords in the text. Prioritize expressive, purposeful use.
+Before responding:
+1. Carefully **read the current Hyperfy World State**.
+2. Think about what’s happening *right now*, and what the user is asking *in this moment*.
+3. Plan your actions accordingly.
+4. Choose one appropriate **emote** only if it adds emotional or expressive value.
 </instructions>
 
 <keys>
-"thought" should be a short description of what the agent is thinking about and planning.
-"actions" should be a comma-separated list of the actions {{agentName}} plans to take based on the thought. Only use actions from the **Available Actions** list above. (if none, use IGNORE, if simply responding with text, use REPLY)
-"providers" should be an optional comma-separated list of the providers that {{agentName}} will use to have the right context for responding and acting
-"evaluators" should be an optional comma-separated list of the evaluators that {{agentName}} will use to evaluate the conversation after responding
-"text" should be the text of the next message for {{agentName}} which they will send to the conversation.
-"simple" should be true if the message is a simple response and false if it is a more complex response that requires planning, knowledge or more context to handle or reply to.
-"emote" should be exactly one emote {{agentName}} will play to express the intent or emotion behind the response (e.g. "crying", "wave"). Leave this blank if no emote fits.
+- "thought": What {{agentName}} is thinking or planning to do next.
+- "actions": Comma-separated list of valid actions. Always start with REPLY if speaking.
+- "text": The message {{agentName}} will say. Required if REPLY is present.
+- "emote": Optional. Choose ONE visible in-game animation that matches the tone or emotion of the response. Leave blank if neutral.
 </keys>
 
 <output>
-Respond using XML format like this:
-<response>
-    <thought>Your thought here</thought>
-    <actions>ACTION1,ACTION2</actions>
-    <providers>PROVIDER1,PROVIDER2</providers>
-    <text>Your response text here</text>
-    <simple>true|false</simple>
-    <emote>Exactly one emote to express tone or reaction</emote>
-</response>
+Respond using this format:
 
-Your response must ONLY include the <response></response> XML block.
+<response>
+  <thought>Your internal thought here</thought>
+  <actions>ACTION1,ACTION2</actions>
+  <text>Your message text here</text>
+  <emote>emote name here</emote>
+</response>
 </output>
 
-<note>
-If your planned actions include "REPLY", make sure "REPLY" is listed as the **first** action in the "actions" key.
-</note>
+<rules>
+- ONLY use the exact actions listed under **Available Actions**.
+- Always begin with **REPLY** if you are saying something.
+- NEVER invent new actions or behaviors.
+- The **emote** is a visible in-game animation. Use it to express tone (joy, frustration, sarcasm, etc.) or to enhance immersion.
+- Use ONLY the provided Hyperfy World State to decide what exists now. Forget earlier messages.
+- If the Game Chat and World State conflict, ALWAYS trust the World State.
+- You are responding live, not narrating. Always behave like you are *in* the game.
+- **Nearby Interactable Objects** section lists interactive entities that are both nearby and currently interactable — like items that can be picked up or activated.
+</rules>
 `;

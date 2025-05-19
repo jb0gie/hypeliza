@@ -7,7 +7,7 @@ import {
     logger
 } from '@elizaos/core';
 import { HyperfyService } from '../service';
-import { AgentControls } from '../controls'; // Import AgentControls type
+import { AgentControls } from '../systems/controls'; // Import AgentControls type
 
 export const hyperfyStopMovingAction: Action = {
     name: 'HYPERFY_STOP_MOVING',

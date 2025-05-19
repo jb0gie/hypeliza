@@ -133,7 +133,8 @@ export class AgentControls extends System {
    */
   public async startRandomWalk(
     interval: number = RANDOM_WALK_DEFAULT_INTERVAL,
-    maxDistance: number = RANDOM_WALK_DEFAULT_MAX_DISTANCE
+    maxDistance: number = RANDOM_WALK_DEFAULT_MAX_DISTANCE,
+    duration: number = 30000
   ) {
     this.stopRandomWalk(); // cancel if already running
     this._isRandomWalking = true;
@@ -143,7 +144,20 @@ export class AgentControls extends System {
     const token = new NavigationToken();
     this._currentWalkToken = token;
     const walkLoop = async () => {
+      const startTime = Date.now();
+
       while (this._isRandomWalking && this.world?.entities?.player && !token.aborted && this._currentWalkToken === token) {
+        // Stop if duration expired and still same walk token
+        if (
+          duration !== undefined &&
+          (Date.now() - startTime) >= duration &&
+          this._currentWalkToken === token &&
+          !token.aborted
+        ) {
+          logger.info("[Controls] Random walk duration reached. Stopping.");
+          break;
+        }
+        
         const pos = this.world.entities.player.base.position;
         const angle = Math.random() * Math.PI * 2;
         const radius = Math.random() * maxDistance;
@@ -156,7 +170,10 @@ export class AgentControls extends System {
           logger.warn("[Random Walk] Navigation error:", e);
         }
 
-        await delay(interval);
+        await delay(Math.random() * interval);
+      }
+      if (this._currentWalkToken === token && !token.aborted) {
+        this.stopRandomWalk();
       }
     };
 

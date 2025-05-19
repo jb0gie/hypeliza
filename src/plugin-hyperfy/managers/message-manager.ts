@@ -97,31 +97,32 @@ export class MessageManager {
         // Create a callback function to handle responses
         const callback: HandlerCallback = async (responseContent: Content): Promise<Memory[]> => {
           console.info(`[Hyperfy Chat Callback] Received response: ${JSON.stringify(responseContent)}`)
-          if (responseContent.text) {
-            console.log(`[Hyperfy Chat Response] ${responseContent}`)
-            const emote = responseContent.emote as string;
-            // Send response back to Hyperfy
-            const emoteManager = service.getEmoteManager();
-            if (emote) {
-              emoteManager.playEmote(emote);
-            }
-            this.sendMessage(responseContent.text);
-
-            const callbackMemory: Memory = {
-              id: createUniqueUuid(this.runtime, Date.now().toString()),
-              entityId: this.runtime.agentId,
-              agentId: this.runtime.agentId,
-              content: {
-                ...responseContent,
-                channelType: ChannelType.WORLD,
-                emote
-              },
-              roomId: elizaRoomId,
-              createdAt: Date.now(),
-            };
-            
-            await this.runtime.createMemory(callbackMemory, 'messages');
+          
+          console.log(`[Hyperfy Chat Response] ${responseContent}`)
+          const emote = responseContent.emote as string;
+          // Send response back to Hyperfy
+          const emoteManager = service.getEmoteManager();
+          if (emote) {
+            emoteManager.playEmote(emote);
           }
+          if (responseContent.text) {
+            this.sendMessage(responseContent.text);
+          }
+          const callbackMemory: Memory = {
+            id: createUniqueUuid(this.runtime, Date.now().toString()),
+            entityId: this.runtime.agentId,
+            agentId: this.runtime.agentId,
+            content: {
+              ...responseContent,
+              channelType: ChannelType.WORLD,
+              emote
+            },
+            roomId: elizaRoomId,
+            createdAt: Date.now(),
+          };
+          
+          await this.runtime.createMemory(callbackMemory, 'messages');
+        
           return [];
         };
 
@@ -201,7 +202,7 @@ export class MessageManager {
     }
   }
 
-  async getRecentMessages(roomId: UUID, count = 10) {
+  async getRecentMessages(roomId: UUID, count = 20) {
     const [entitiesData, recentMessagesData] = await Promise.all([
       getEntityDetails({ runtime: this.runtime, roomId }),
       this.runtime.getMemories({
