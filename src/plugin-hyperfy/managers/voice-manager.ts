@@ -211,6 +211,8 @@ export class VoiceManager {
             createdAt: Date.now(),
           };
 
+          await this.runtime.createMemory(responseMemory, 'messages');
+
           if (responseMemory.content.text?.trim()) {
             const responseStream = await this.runtime.useModel(
               ModelType.TEXT_TO_SPEECH,
@@ -223,8 +225,6 @@ export class VoiceManager {
               emoteManager.playEmote(emote);
               await this.playAudio(audioBuffer);
             }
-
-            await this.runtime.createMemory(responseMemory, 'messages');
           }
 
           return [responseMemory];

@@ -106,7 +106,7 @@ export class BehaviorManager {
       true
     );
 
-    const responsePrompt = composePromptFromState({ state, template: autoTemplate(recentMessages) });
+    const responsePrompt = composePromptFromState({ state, template: autoTemplate() });
 
     // decide
     const response = await this.runtime.useModel(ModelType.TEXT_LARGE, {
@@ -177,20 +177,19 @@ export class BehaviorManager {
         roomId: elizaRoomId,
         createdAt: Date.now(),
       };
-        
+
       await this.runtime.createMemory(callbackMemory, 'messages');
 
-      if (responseContent.actions && !responseContent.actions.includes("IGNORE")) {
-        if (emote) {
-          const emoteManager = service.getEmoteManager();
-          emoteManager.playEmote(emote);
-        }
-
-        if (responseContent.text) {
-          const messageManager = service.getMessageManager();
-          messageManager.sendMessage(responseContent.text)
-        }
+      if (emote) {
+        const emoteManager = service.getEmoteManager();
+        emoteManager.playEmote(emote);
       }
+
+      if (responseContent.text) {
+        const messageManager = service.getMessageManager();
+        messageManager.sendMessage(responseContent.text)
+      }
+      
       return [];
     };
     
