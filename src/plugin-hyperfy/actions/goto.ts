@@ -16,26 +16,36 @@ import { AgentControls } from '../systems/controls'; // Import AgentControls typ
 // import type * as THREE from 'three';
 
 // Define a simple template for entity extraction
-const entityExtractionTemplate = `
-# Task: Identify the target Hyperfy Entity ID based on the recent Conversation Messages and the current Hyperfy World State.
-# This request may come from an automatic behavior loop — not necessarily a user message — so do NOT assume the last message contains a command or instruction.
-# You must examine the overall conversation context and determine whether {{agentName}} has a meaningful reason to go to a specific entity.
-# Use only the Hyperfy Entity IDs listed in the provided Hyperfy World State — not person IDs or names.
+export const entityExtractionTemplate = (thoughts?: string) => {
+  return `
+# Task:
+Identify the correct Hyperfy **Entity ID** to navigate to, based on recent conversations, the agent's thoughts, and the current Hyperfy World State.
 
-{{providers}}
+# Constraints:
+- Only use **Hyperfy Entity IDs** listed in the provided world state.
+- Do **not** use person IDs, names, or guesses.
+
+# Agent Thought:
+${thoughts || 'None'}
+
+# World State:
+{{hyperfyStatus}}
 
 # Instructions:
-You are {{agentName}}. Carefully review the recent messages and the Hyperfy world state. Decide if there is a valid reason — based on either recent user interaction or the general context — to navigate toward one of the listed entities.
+You are **{{agentName}}**, a virtual agent in a Hyperfy world. Based on your thought process and the recent messages, determine which entity the agent should navigate to.
 
-Response format should be a valid JSON block like this:
+Return your answer as a JSON object using the following format:
+
 \`\`\`json
 {
-    "entityId": "<string>" // The ID of the target entity, or null if none is clearly specified
+  "entityId": "<string>" // The ID of the target entity, or null if no target is clearly identifiable
 }
 \`\`\`
 
-Your response should include the valid JSON block and nothing else.
-`;
+Only return the JSON object. Do not include any other text.
+  `.trim();
+};
+
 
 export const hyperfyGotoEntityAction: Action = {
     name: 'HYPERFY_GOTO_ENTITY',
@@ -52,7 +62,14 @@ export const hyperfyGotoEntityAction: Action = {
       _state: State,
       options: { entityId?: string },
       callback: HandlerCallback,
+      responses,
     ) => {
+      const thoughtSnippets =
+        responses
+          ?.map((res) => res.content?.thought)
+          .filter(Boolean)
+          .join('\n') ?? '';
+
       const service = runtime.getService<HyperfyService>(HyperfyService.serviceType);
       const world = service?.getWorld(); // Use the getter
       const controls = world?.controls as AgentControls | undefined; // Get controls and cast type
@@ -70,20 +87,15 @@ export const hyperfyGotoEntityAction: Action = {
           logger.info('[GOTO Action] No entityId in options, attempting extraction from message...');
           try {
               // Compose state including entities provider
-              const extractionState = await runtime.composeState(message, [
-                'HYPERFY_WORLD_STATE', 
-                'RECENT_MESSAGES'
-              ], true);
+              const extractionState = await runtime.composeState(message);
 
               const prompt = composePromptFromState({
                   state: extractionState,
-                  template: entityExtractionTemplate,
+                  template: entityExtractionTemplate(thoughtSnippets),
               });
 
-              // console.log("prompt", prompt);
-
               // Use OBJECT_SMALL model for structured response
-              const response = await runtime.useModel(ModelType.OBJECT_SMALL, { prompt });
+              const response = await runtime.useModel(ModelType.OBJECT_LARGE, { prompt });
 
               if (response && response.entityId && typeof response.entityId === 'string') {
                   targetEntityId = response.entityId;
@@ -106,7 +118,8 @@ export const hyperfyGotoEntityAction: Action = {
       }
 
       try {
-        const targetPosition = service.getEntityPosition(targetEntityId);
+        const entity = world.entities.items.get(targetEntityId)
+        const targetPosition = entity?.base?.position || entity?.root?.position;;
 
         if (!targetPosition) {
             const targetName = service.getEntityName(targetEntityId);
@@ -122,16 +135,16 @@ export const hyperfyGotoEntityAction: Action = {
         controls.goto(targetPosition.x, targetPosition.z); // Use controls method
 
         // // Provide initial confirmation
-        // await callback({
-        //    text: `Navigating towards ${targetName || `entity ${targetEntityId}`}...`,
-        //    actions: ['HYPERFY_GOTO_ENTITY'],
-        //    source: 'hyperfy',
-        //    metadata: {
-        //        targetEntityId: targetEntityId,
-        //        targetPosition: targetPosition.toArray(),
-        //        status: 'navigation_started'
-        //    }
-        // });
+        await callback({
+           text: ``,
+           actions: ['HYPERFY_GOTO_ENTITY'],
+           source: 'hyperfy',
+           metadata: {
+               targetEntityId: targetEntityId,
+               targetPosition: targetPosition.toArray(),
+               status: 'navigation_started'
+           }
+        });
 
       } catch (error: any) {
         logger.error(`Error during HYPERFY_GOTO_ENTITY for ID ${targetEntityId}:`, error);
