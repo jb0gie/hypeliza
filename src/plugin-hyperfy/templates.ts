@@ -5,7 +5,7 @@ export const autoTemplate = () => `
 <note>
 This is a regular behavior update from {{agentName}}, not triggered by a user message.
 
-{{agentName}} should check the recent Conversation Messages and observe the Hyperfy World State before responding.
+{{agentName}} must check the recent Conversation Messages before responding. Only choose an action if it adds something new, useful, or appropriate based on the current situation.
 
 If speaking aloud, {{agentName}} must choose either **REPLY** (to talk to users) or **HYPERFY_AMBIENT_SPEECH** (to talk to themselves or the environment) — but **not both** in the same response.
 
