@@ -97,7 +97,6 @@ export class BehaviorManager {
 
     const responsePrompt = composePromptFromState({ state, template: autoTemplate() });
 
-    console.log("$$$$$$$$$$", responsePrompt)
     // decide
     const response = await this.runtime.useModel(ModelType.TEXT_LARGE, {
       prompt: responsePrompt,
