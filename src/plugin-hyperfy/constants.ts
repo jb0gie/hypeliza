@@ -111,7 +111,7 @@ export const HYPERFY_ACTIONS = [
   },
   {
     name: 'REPLY',
-    description: '**ABSOLUTELY DO NOT** repeat yourself. {{agentName}} must thoroughly review the recent Conversation Messages and ensure the response is meaningfully different. If the message is even slightly similar to a recent reply, do **NOT** respond. Only choose this action if you are adding **new value, insight, or context** — otherwise, skip it.'
+    description: '**ABSOLUTELY DO NOT** repeat yourself. {{agentName}} must thoroughly review the recent In-World Messages and ensure the response is meaningfully different. If the message is even slightly similar to a recent reply, do **NOT** respond. Only choose this action if you are adding **new value, insight, or context** — otherwise, skip it.'
   },  
   {
     name: 'IGNORE',
