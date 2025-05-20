@@ -154,7 +154,7 @@ export class VoiceManager {
       const service = this.getService();
       const world = service.getWorld();
 
-      const playerInfo = world.entities.player(playerId);
+      const playerInfo = world.entities.getPlayer(playerId);
       const userName = playerInfo.data.name;
       const name = userName;
       const _currentWorldId = service.currentWorldId;
