@@ -83,7 +83,7 @@ export class BehaviorManager {
     const entityId = createUniqueUuid(this.runtime, this.runtime.agentId);
 
     const newMessage: Memory = {
-      id:  createUniqueUuid(this.runtime, Date.now().toString()),
+      id: createUniqueUuid(this.runtime, Date.now().toString()),
       content: {
         text: '',
         type: 'text',
@@ -93,21 +93,11 @@ export class BehaviorManager {
       entityId,
     };
 
-    const messageManager = service.getMessageManager();
-    const recentMessages = await messageManager.getRecentMessages(elizaRoomId)
-    
-    const state = await this.runtime.composeState(
-      newMessage, 
-      [
-        'CHARACTER',
-        'HYPERFY_WORLD_STATE',
-        'HYPERFY_EMOTE_LIST',
-      ],
-      true
-    );
+    const state = await this.runtime.composeState(newMessage);
 
     const responsePrompt = composePromptFromState({ state, template: autoTemplate() });
 
+    console.log("$$$$$$$$$$", responsePrompt)
     // decide
     const response = await this.runtime.useModel(ModelType.TEXT_LARGE, {
       prompt: responsePrompt,
@@ -129,26 +119,6 @@ export class BehaviorManager {
       roomId: elizaRoomId,
     };
 
-    await this.runtime.ensureWorldExists({
-      id: _currentWorldId,
-      name: 'Hyperfy World',
-      agentId: this.runtime.agentId,
-      serverId: 'hyperfy',
-      metadata: {
-        type: 'hyperfy',
-      },
-    })
-
-    await this.runtime.ensureRoomExists({
-      id: elizaRoomId,
-      name: 'Hyperfy Chat',
-      source: 'hyperfy',
-      type: ChannelType.WORLD,
-      channelId: _currentWorldId,
-      serverId: 'hyperfy',
-      worldId: _currentWorldId,
-    })
-
     const name = world.entities.player.data.name;
     await this.runtime.ensureConnection({
       entityId: entityId,
@@ -160,6 +130,7 @@ export class BehaviorManager {
       serverId: 'hyperfy',
       type: ChannelType.WORLD,
       worldId: _currentWorldId,
+      userId: world.entities.player.data.id
     })
 
     const callback: HandlerCallback = async (responseContent: Content): Promise<Memory[]> => {
