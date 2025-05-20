@@ -1,4 +1,4 @@
-import { ChannelType, Content, EventType, HandlerCallback, IAgentRuntime, Memory, UUID, createUniqueUuid, formatMessages, getEntityDetails } from "@elizaos/core";
+import { ChannelType, Entity, Content, EventType, HandlerCallback, IAgentRuntime, Memory, UUID, formatTimestamp, createUniqueUuid, getEntityDetails } from "@elizaos/core";
 import { HyperfyService } from "../service";
 import { agentActivityLock } from "./guards";
 import { messageHandlerTemplate } from "../templates";
@@ -34,30 +34,6 @@ export class MessageManager {
         const elizaRoomId = createUniqueUuid(this.runtime, _currentWorldId || 'hyperfy-unknown-world')
         const entityId = createUniqueUuid(this.runtime, msg.fromId.toString()) as UUID
 
-        console.debug(`[Hyperfy Chat] Creating world: ${hyperfyWorldId}`)
-        // Register the world if it doesn't exist
-        await this.runtime.ensureWorldExists({
-          id: hyperfyWorldId,
-          name: 'Hyperfy World',
-          agentId: this.runtime.agentId,
-          serverId: 'hyperfy',
-          metadata: {
-            type: 'hyperfy',
-          },
-        })
-
-        console.debug(`[Hyperfy Chat] Creating room: ${elizaRoomId}`)
-        // Register the room if it doesn't exist
-        await this.runtime.ensureRoomExists({
-          id: elizaRoomId,
-          name: 'Hyperfy Chat',
-          source: 'hyperfy',
-          type: ChannelType.WORLD,
-          channelId: _currentWorldId,
-          serverId: 'hyperfy',
-          worldId: hyperfyWorldId,
-        })
-
         console.debug(`[Hyperfy Chat] Creating entity connection for: ${entityId}`)
         // Ensure connection for the sender entity
         await this.runtime.ensureConnection({
@@ -70,6 +46,7 @@ export class MessageManager {
           serverId: 'hyperfy',
           type: ChannelType.WORLD,
           worldId: hyperfyWorldId,
+          userId: msg.fromId
         })
 
         // Create the message memory
@@ -202,6 +179,49 @@ export class MessageManager {
     }
   }
 
+  formatMessages({
+    messages,
+    entities,
+  }: {
+    messages: Memory[];
+    entities: Entity[];
+  }) {
+    const messageStrings = messages
+      .filter((message: Memory) => message.entityId)
+      .map((message: Memory) => {
+        const content = message.content as Content;
+        const messageText = content.text || "";
+        const messageActions = content.actions;
+  
+        const entity = entities.find((e: Entity) => e.id === message.entityId) as any;
+        const formattedName = entity?.names[0] || "Unknown User";
+        const formattedId = entity ? JSON.parse(entity.data).hyperfy.id : "";
+  
+        const messageTime = new Date(message.createdAt);
+        const hours = messageTime.getHours().toString().padStart(2, "0");
+        const minutes = messageTime.getMinutes().toString().padStart(2, "0");
+        const timeString = `${hours}:${minutes}`;
+  
+        const timestamp = formatTimestamp(message.createdAt); // assuming this is already defined
+  
+        const actionString =
+          messageActions && messageActions.length > 0
+            ? ` (${messageActions.join(", ")})`
+            : "";
+  
+        const textPart = messageText ? `: ${messageText}` : "";
+  
+        const formattedLine = `- ${timeString} (${timestamp}) ${formattedName} [${formattedId}]${actionString}${textPart}`;
+  
+        return formattedLine;
+      })
+      .filter(Boolean)
+      .join("\n");
+  
+    return messageStrings;
+  }
+  
+
   async getRecentMessages(roomId: UUID, count = 20) {
     const [entitiesData, recentMessagesData] = await Promise.all([
       getEntityDetails({ runtime: this.runtime, roomId }),
@@ -212,7 +232,7 @@ export class MessageManager {
         unique: false,
       }),
     ]);
-    const formattedRecentMessages = formatMessages({
+    const formattedRecentMessages = this.formatMessages({
       messages: recentMessagesData,
       entities: entitiesData,
     });

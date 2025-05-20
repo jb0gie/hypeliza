@@ -161,26 +161,27 @@ export class VoiceManager {
       const channelId = _currentWorldId;
       const roomId = createUniqueUuid(this.runtime, _currentWorldId || 'hyperfy-unknown-world')
       const entityId = createUniqueUuid(this.runtime, playerId) as UUID
-      
-      const uniqueEntityId = createUniqueUuid(this.runtime, entityId);
+
       const type = ChannelType.WORLD;
 
+      // Ensure connection for the sender entity
       await this.runtime.ensureConnection({
-        worldId: _currentWorldId,
-        entityId: uniqueEntityId,
+        entityId,
         roomId,
         userName,
         name,
         source: 'hyperfy',
         channelId,
         serverId: 'hyperfy',
-        type,
-      });
+        type: ChannelType.WORLD,
+        worldId: _currentWorldId,
+        userId: playerId
+      })
 
       const memory: Memory = {
         id: createUniqueUuid(this.runtime, `${channelId}-voice-message-${Date.now()}`),
         agentId: this.runtime.agentId,
-        entityId: uniqueEntityId,
+        entityId: entityId,
         roomId,
         content: {
           text: message,
