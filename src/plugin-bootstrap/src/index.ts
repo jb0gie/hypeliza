@@ -279,18 +279,8 @@ const messageReceivedHandler = async ({
             state = await runtime.composeState(message, responseContent?.providers || []);
           }
 
-          if (
-            responseContent &&
-            responseContent.simple &&
-            responseContent.text &&
-            (responseContent.actions?.length === 0 ||
-              (responseContent.actions?.length === 1 &&
-                responseContent.actions[0].toUpperCase() === 'REPLY'))
-          ) {
-            await callback(responseContent);
-          } else {
-            await runtime.processActions(message, responseMessages, state, callback);
-          }
+          await runtime.processActions(message, responseMessages, state, callback);
+          
           await runtime.evaluate(message, state, shouldRespond, callback, responseMessages);
         } else {
           // Handle the case where the agent decided not to respond
@@ -543,6 +533,7 @@ const events = {
         runtime: payload.runtime,
         message: payload.message,
         callback: payload.callback,
+        onComplete: payload.onComplete,
       });
     },
   ],
@@ -641,13 +632,8 @@ export const bootstrapPlugin: Plugin = {
   events,
   providers: [
     providers.timeProvider,
-    providers.entitiesProvider,
-    providers.choiceProvider,
-    providers.capabilitiesProvider,
-    providers.providersProvider,
     providers.actionsProvider,
     providers.characterProvider,
-    providers.worldProvider,
     providers.recentMessagesProvider,
   ]
 };
