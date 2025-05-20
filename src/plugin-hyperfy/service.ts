@@ -284,7 +284,6 @@ export class HyperfyService extends Service {
       this.voiceManager = new VoiceManager(this.runtime);
 
       this.behaviorManager = new BehaviorManager(this.runtime);
-      this.behaviorManager.start();
       
       this.startSimulation()
       this.startEntityUpdates()
@@ -487,6 +486,19 @@ export class HyperfyService extends Service {
         console.log('agentPlayerIdReady', agentPlayerIdReady)
         console.log('networkReady', networkReady)
         if (agentPlayerReady && agentPlayerIdReady && networkReady) {
+            const entityId = createUniqueUuid(this.runtime, this.runtime.agentId);
+            const entity = await this.runtime.getEntityById(entityId)
+            if (entity) {
+              entity.metadata.hyperfy = {
+                id: agentPlayerId,
+                name: agentPlayer?.data?.name,
+                userName:agentPlayer?.data?.name
+              }
+              
+              await this.runtime.updateEntity(entity)
+            }
+            this.behaviorManager.start();
+            
              // --- Set Name (if not already done) ---
              if (!pollingTasks.name) {
                  console.info(`[Name Polling] Player (ID: ${agentPlayerId}), network ready. Attempting name...`);
