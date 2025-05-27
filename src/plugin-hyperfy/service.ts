@@ -12,6 +12,7 @@ import fs from 'fs/promises'
 import path from 'path'
 import { createNodeClientWorld } from './hyperfy/src/core/createNodeClientWorld.js'
 import { AgentControls } from './systems/controls'
+import { AgentEnvironment } from './systems/environment.js'
 import { AgentLoader } from './systems/loader'
 import { AgentLiveKit } from './systems/liveKit.js'
 import { AgentActions } from './systems/actions.js'
@@ -102,6 +103,9 @@ export class HyperfyService extends Service {
     try {
       const world = createNodeClientWorld()
       this.world = world
+
+      this.puppeteerManager = new PuppeteerManager(this.runtime);
+
       ;(world as any).playerNamesMap = this.playerNamesMap
 
       globalThis.self = globalThis
@@ -121,6 +125,10 @@ export class HyperfyService extends Service {
       const loader = new AgentLoader(world)
       ;(world as any).loader = loader
       world.systems.push(loader);
+
+      const environment = new AgentEnvironment(world);
+      ;(world as any).environment = environment
+      world.systems.push(environment);
 
       // HACK: Overwriting `chat.add` to prevent crashes caused by the original implementation.
       // This ensures safe handling of chat messages and avoids unexpected errors from undefined fields.
@@ -188,7 +196,7 @@ export class HyperfyService extends Service {
       this.emoteManager = new EmoteManager(this.runtime);
       this.messageManager = new MessageManager(this.runtime);
       this.voiceManager = new VoiceManager(this.runtime);
-      this.puppeteerManager = new PuppeteerManager(this.runtime);
+      
       this.behaviorManager = new BehaviorManager(this.runtime);
 
       this.startAppearancePolling()
@@ -400,6 +408,7 @@ export class HyperfyService extends Service {
               
               await this.runtime.updateEntity(entity)
             }
+            
             this.behaviorManager.start();
             
              // --- Set Name (if not already done) ---

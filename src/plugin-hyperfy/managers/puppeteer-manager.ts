@@ -1,6 +1,7 @@
 ////@ts-nocheck
 import path from 'path'
 import fs from 'fs'
+import { promises as fsPromises } from 'fs';
 import puppeteer from 'puppeteer'
 import { IAgentRuntime, ModelType } from '@elizaos/core'
 import { HyperfyService } from '../service.js'
@@ -330,6 +331,11 @@ export class PuppeteerManager {
 
       window.scene = loadedScene
 
+      if (window.environment) {
+        window.scene.environment = window.environment;
+        window.scene.background = window.environment;
+      }
+
       // Ensure renderer updates
       window.renderer.render(window.scene, window.camera)
     }, sceneJson, STRIP_SLOTS)
@@ -376,6 +382,30 @@ export class PuppeteerManager {
       // Return a *serialisable* plain array of numbers (0-255)
       return [...new Uint8Array(buffer)];
     }, url, STRIP_SLOTS);
+  }
+
+  public async loadEnvironmentHDR(url: string): Promise<void> {
+    await this.init();
+
+    const isLocal = !/^https?:\/\//.test(url);
+    if (isLocal) {
+      const fileBuffer = await fsPromises.readFile(url);
+      const base64 = fileBuffer.toString('base64');
+      url = `data:image/vnd.radiance;base64,${base64}`;
+    }
+  
+    await this.page.evaluate(async (url) => {
+      const loader = new window.RGBELoader();
+      const hdrTexture = await new Promise((resolve, reject) => {
+        loader.load(url, resolve, undefined, reject);
+      });
+  
+      window.environment = hdrTexture;
+      window.scene.environment = hdrTexture;
+      window.scene.background = hdrTexture;
+  
+      window.renderer.render(window.scene, window.camera);
+    }, url);
   }
 
   private getService() {

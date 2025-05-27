@@ -6,6 +6,8 @@ import { glbToNodes } from "../hyperfy/src/core/extras/glbToNodes.js";
 import { createEmoteFactory } from "../hyperfy/src/core/extras/createEmoteFactory.js";
 import { AgentAvatar } from "./avatar.js";
 import { PuppeteerManager } from "../managers/puppeteer-manager.js";
+import { promises as fsPromises } from 'fs';
+
 // import { VRMLoaderPlugin } from "@pixiv/three-vrm";
 // --- Mock Browser Environment for Loaders ---
 // These might need adjustment based on GLTFLoader/VRMLoaderPlugin requirements
@@ -133,8 +135,15 @@ export class AgentLoader extends System {
     const key = `${type}/${url}`;
     if (this.promises.has(key)) return this.promises.get(key);
 
-    const resolvedUrl = this.resolveUrl(url);
+    let resolvedUrl = this.resolveUrl(url);
 
+    const isLocal = !/^https?:\/\//.test(resolvedUrl);
+    if (isLocal) {
+      const fileBuffer = await fsPromises.readFile(resolvedUrl);
+      const base64 = fileBuffer.toString('base64');
+      resolvedUrl = `data:image/vnd.radiance;base64,${base64}`;
+    }
+    
     const promise = fetch(resolvedUrl)
       .then(async (response) => {
         if (!response.ok) {
