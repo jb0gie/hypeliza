@@ -2,29 +2,19 @@ import 'ses'
 
 import type { UUID } from '@elizaos/core'
 import {
-  ChannelType,
-  type Content,
   createUniqueUuid,
   EventType,
-  type HandlerCallback,
   type IAgentRuntime,
-  logger,
-  type Memory,
   Service,
-  ModelType,
-  composePromptFromState
 } from '@elizaos/core'
 import crypto from 'crypto'
 import fs from 'fs/promises'
 import path from 'path'
-import { performance } from 'perf_hooks'
-import * as THREE from 'three'
 import { createNodeClientWorld } from './hyperfy/src/core/createNodeClientWorld.js'
 import { AgentControls } from './systems/controls'
 import { AgentLoader } from './systems/loader'
 import { AgentLiveKit } from './systems/liveKit.js'
 import { AgentActions } from './systems/actions.js'
-import { Vector3Enhanced } from './hyperfy/src/core/extras/Vector3Enhanced.js'
 import { loadPhysX } from './physx/loadPhysX.js'
 import { BehaviorManager } from "./managers/behavior-manager.js"
 import { EmoteManager } from './managers//emote-manager.js'
@@ -35,11 +25,8 @@ import { hashFileBuffer } from './utils'
 const LOCAL_AVATAR_PATH = process.env.HYPERFY_AGENT_AVATAR_PATH || './avatar.vrm'
 
 const HYPERFY_WS_URL = process.env.WS_URL || 'wss://chill.hyperfy.xyz/ws'
-const HYPERFY_TICK_RATE = 50
-const HYPERFY_TEST_MODE_MOVE_INTERVAL = 1000
-const HYPERFY_TEST_MODE_CHAT_INTERVAL = 5000
 const HYPERFY_APPEARANCE_POLL_INTERVAL = 30000
-const HYPERFY_ENTITY_UPDATE_INTERVAL = 1000
+
 
 export class HyperfyService extends Service {
   static serviceType = 'hyperfy'
@@ -48,27 +35,16 @@ export class HyperfyService extends Service {
   private world: any | null = null
   private controls: AgentControls | null = null
   private isConnectedState: boolean = false
-  private currentEntities: Map<string, any> = new Map()
-  private agentState: any = { position: null, rotation: null }
-  private tickIntervalId: NodeJS.Timeout | null = null
-  private entityUpdateIntervalId: NodeJS.Timeout | null = null
   private wsUrl: string | null = null
   private _currentWorldId: UUID | null = null
   private processedMsgIds: Set<string> = new Set()
-
-  private randomMoveIntervalId: NodeJS.Timeout | null = null
-  private randomChatIntervalId: NodeJS.Timeout | null = null
-  private currentMoveKey: string | null = null
 
   private playerNamesMap: Map<string, string> = new Map()
   private appearanceIntervalId: NodeJS.Timeout | null = null
   private appearanceSet: boolean = false
   private nameSet: boolean = false
-  private PHYSX: any = null
-  private isPhysicsSetup: boolean = false
+
   private connectionTime: number | null = null
-  private emoteHashMap: Map<string, string> = new Map();
-  private currentEmoteTimeout: NodeJS.Timeout | null = null;
   private behaviorManager: BehaviorManager;
   private emoteManager: EmoteManager;
   private messageManager: MessageManager;
@@ -85,55 +61,6 @@ export class HyperfyService extends Service {
   constructor(protected runtime: IAgentRuntime) {
     super();
     console.info('HyperfyService instance created')
-  }
-
-  private entityAddedListener = (entity: any): void => {
-    if (!entity || !entity.id) return
-    if (entity?.data?.type === 'player' && entity.data.name) {
-        if (!this.playerNamesMap.has(entity.id)) {
-            console.info(`[Name Map Add] Setting initial name for ID ${entity.id}: '${entity.data.name}'`)
-            this.playerNamesMap.set(entity.id, entity.data.name)
-        }
-    }
-    this.currentEntities.set(entity.id, this.extractEntityState(entity))
-    console.debug(`[Entity Listener] Added/Updated entity: ${entity.id}`)
-  }
-
-  private entityModifiedListener = (entityId: string, changedData: any, entity?: any): void => {
-      if (!entityId) return
-      const fullEntity = entity || this.world?.entities?.items?.get(entityId)
-
-      if (changedData?.name && fullEntity?.data?.type === 'player') {
-          const currentName = this.playerNamesMap.get(entityId)
-          if (currentName !== changedData.name) {
-              console.info(`[Name Map Update] Updating name for ID ${entityId}: '${changedData.name}'`)
-              this.playerNamesMap.set(entityId, changedData.name)
-          }
-      }
-      if (fullEntity) {
-        this.currentEntities.set(entityId, this.extractEntityState(fullEntity))
-        console.debug(`[Entity Listener] Modified entity: ${entityId}`)
-      } else {
-        const existing = this.currentEntities.get(entityId)
-        if (existing) {
-            console.warn(`[Entity Listener] Modified entity ${entityId} but full entity data unavailable.`)
-            const potentialNewState = this.extractEntityState({ id: entityId, data: { ...existing, ...changedData } })
-            this.currentEntities.set(entityId, potentialNewState)
-        } else {
-            console.warn(`[Entity Listener] Modified non-tracked entity: ${entityId}`)
-        }
-      }
-  }
-
-  private entityRemovedListener = (entityId: string): void => {
-      if (!entityId) return
-      if (this.playerNamesMap.has(entityId)) {
-          console.info(`[Name Map Update] Removing name for ID ${entityId}`)
-          this.playerNamesMap.delete(entityId)
-      }
-      if(this.currentEntities.delete(entityId)){
-        console.debug(`[Entity Listener] Removed entity: ${entityId}`)
-      }
   }
 
   static async start(runtime: IAgentRuntime): Promise<HyperfyService> {
@@ -169,8 +96,7 @@ export class HyperfyService extends Service {
     this._currentWorldId = config.worldId
     this.appearanceSet = false
     this.nameSet = false
-    this.isPhysicsSetup = false
-
+    
     try {
       const world = createNodeClientWorld()
       this.world = world
@@ -242,28 +168,6 @@ export class HyperfyService extends Service {
       await this.world.init(hyperfyConfig)
       console.info('Hyperfy world initialized.')
 
-      console.info("[Hyperfy Connect] World initialized. Setting up listeners, physics, and appearance...")
-
-      if (this.world?.entities && typeof this.world.entities.on === 'function') {
-        console.info('[Hyperfy Connect] Attaching entity listeners...')
-        this.world.entities.off('entityAdded', this.entityAddedListener.bind(this))
-        this.world.entities.off('entityModified', this.entityModifiedListener.bind(this))
-        this.world.entities.off('entityRemoved', this.entityRemovedListener.bind(this))
-
-        this.world.entities.on('entityAdded', this.entityAddedListener.bind(this))
-        this.world.entities.on('entityModified', this.entityModifiedListener.bind(this))
-        this.world.entities.on('entityRemoved', this.entityRemovedListener.bind(this))
-
-        this.currentEntities.clear()
-        this.playerNamesMap.clear()
-        this.world.entities.items?.forEach((entity: any, id: string) => {
-             this.entityAddedListener(entity)
-         })
-        console.info(`[Hyperfy Connect] Initial entity count: ${this.currentEntities.size}, Player names: ${this.playerNamesMap.size}`)
-      } else {
-         console.warn("[Hyperfy Connect] world.entities or world.entities.on not available for listener attachment.")
-      }
-
       this.processedMsgIds.clear()
       if (this.world.chat?.msgs) {
         console.info(`Processing ${this.world.chat.msgs.length} existing chat messages.`)
@@ -282,11 +186,7 @@ export class HyperfyService extends Service {
       this.emoteManager = new EmoteManager(this.runtime);
       this.messageManager = new MessageManager(this.runtime);
       this.voiceManager = new VoiceManager(this.runtime);
-
       this.behaviorManager = new BehaviorManager(this.runtime);
-      
-      this.startSimulation()
-      this.startEntityUpdates()
 
       this.startAppearancePolling()
 
@@ -321,7 +221,7 @@ export class HyperfyService extends Service {
     if (this.world.chat?.subscribe) {
       this.startChatSubscription()
     } else {
-        console.warn('[Hyperfy Events] world.chat.subscribe not available.')
+      console.warn('[Hyperfy Events] world.chat.subscribe not available.')
     }
   }
 
@@ -552,105 +452,20 @@ export class HyperfyService extends Service {
   }
 
   public getEntityById(entityId: string): any | null {
-     if (this.currentEntities.has(entityId)) {
-        return this.currentEntities.get(entityId)
-     }
-     return this.world?.entities?.items?.get(entityId) || null
+    return this.world?.entities?.items?.get(entityId) || null
   }
 
-  public getEntityPosition(entityId: string): THREE.Vector3 | null {
-      const entityState = this.currentEntities.get(entityId)
-      if (entityState?.position && Array.isArray(entityState.position) && entityState.position.length === 3) {
-          return new THREE.Vector3(entityState.position[0], entityState.position[1], entityState.position[2])
-      }
-
-      const entity = this.world?.entities?.items?.get(entityId)
-       if (entity?.base?.position instanceof THREE.Vector3 || entity?.base?.position instanceof Vector3Enhanced) {
-            return entity.base.position
-       } else if (entity?.data?.position) {
-           const pos = entity.data.position
-           if (Array.isArray(pos) && pos.length >= 3) {
-               return new THREE.Vector3(pos[0], pos[1], pos[2])
-           } else if (pos && typeof pos.x === 'number') {
-                return new THREE.Vector3(pos.x, pos.y, pos.z)
-           }
-       }
-      return null
+  public getEntityName(entityId: string): string | null {
+    const entity = this.world?.entities?.items?.get(entityId)
+    return entity?.data?.name || entity?.blueprint?.name || 'Unnamed';
   }
-
-   public getEntityName(entityId: string): string | null {
-       if (this.playerNamesMap.has(entityId)) {
-           return this.playerNamesMap.get(entityId) || null
-       }
-       const entityState = this.currentEntities.get(entityId)
-       if (entityState?.name) {
-            return entityState.name
-       }
-       const entity = this.world?.entities?.items?.get(entityId)
-       return entity?.data?.name || null
-   }
-
-   private extractEntityState(entity: any): any {
-        if (!entity || !entity.id) return null
-
-        let positionArray: number[] | null = null
-        if (entity.base?.position instanceof THREE.Vector3) {
-            positionArray = entity.base.position.toArray()
-        } else if (entity.data?.position) {
-            const pos = entity.data.position
-            if (Array.isArray(pos) && pos.length >= 3) {
-                positionArray = [pos[0], pos[1], pos[2]]
-            } else if (pos && typeof pos.x === 'number') {
-                 positionArray = [pos.x, pos.y, pos.z]
-            }
-        }
-
-         let rotationArray: number[] | null = null
-         if (entity.base?.quaternion instanceof THREE.Quaternion) {
-             rotationArray = entity.base.quaternion.toArray()
-         } else if (entity.data?.quaternion) {
-             const rot = entity.data.quaternion
-              if (Array.isArray(rot) && rot.length >= 4) {
-                 rotationArray = [rot[0], rot[1], rot[2], rot[3]]
-             } else if (rot && typeof rot.x === 'number') {
-                  rotationArray = [rot.x, rot.y, rot.z, rot.w]
-             }
-         }
-
-        let name: string | null = null
-        if (entity.data?.type === 'player' && this.playerNamesMap.has(entity.id)) {
-            name = this.playerNamesMap.get(entity.id) || entity.data?.name || null
-        } else {
-            name = entity.data?.name || null
-        }
-
-        const state: any = {
-            id: entity.id,
-            type: entity.data?.type || 'unknown',
-            name: name,
-            position: positionArray,
-            rotation: rotationArray,
-        }
-
-        return state
-   }
 
   async handleDisconnect(): Promise<void> {
       if (!this.isConnectedState && !this.world) return
       console.info('Handling Hyperfy disconnection...')
       this.isConnectedState = false
 
-      this.stopSimulation()
-      this.stopEntityUpdates()
-      this.stopRandomChatting()
       this.stopAppearancePolling()
-
-      if (this.world?.entities && typeof this.world.entities.off === 'function') {
-          console.info("[Hyperfy Cleanup] Removing entity listeners...")
-          this.world.entities.off('entityAdded', this.entityAddedListener.bind(this))
-          this.world.entities.off('entityModified', this.entityModifiedListener.bind(this))
-          this.world.entities.off('entityRemoved', this.entityRemovedListener.bind(this))
-      }
 
       if (this.world) {
           try {
@@ -669,22 +484,14 @@ export class HyperfyService extends Service {
 
       this.world = null
       this.controls = null
-      this.currentEntities.clear()
       this.playerNamesMap.clear()
-      this.agentState = { position: null, rotation: null }
       this.wsUrl = null
       this.appearanceSet = false
-      this.isPhysicsSetup = false
-      this.PHYSX = null
 
       this.processedMsgIds.clear()
 
       this.connectionTime = null; // Clear connection time
 
-      if (this.tickIntervalId) { clearTimeout(this.tickIntervalId); this.tickIntervalId = null; }
-      if (this.entityUpdateIntervalId) { clearInterval(this.entityUpdateIntervalId); this.entityUpdateIntervalId = null; }
-      if (this.randomMoveIntervalId) { clearInterval(this.randomMoveIntervalId); this.randomMoveIntervalId = null; }
-      if (this.randomChatIntervalId) { clearInterval(this.randomChatIntervalId); this.randomChatIntervalId = null; }
       if (this.appearanceIntervalId) { clearInterval(this.appearanceIntervalId); this.appearanceIntervalId = null; }
 
       console.info('Hyperfy disconnection handling complete.')
@@ -694,72 +501,6 @@ export class HyperfyService extends Service {
       console.info(`Disconnecting HyperfyService from world ${this._currentWorldId}`)
       await this.handleDisconnect()
       console.info('HyperfyService disconnect complete.')
-  }
-
-  getState(): { entities: Map<string, any>; agent: any, status: string } {
-      const agentStateCopy = this.agentState ? JSON.parse(JSON.stringify(this.agentState)) : {}
-
-      return {
-          entities: new Map(this.currentEntities),
-          agent: agentStateCopy,
-          status: this.isConnectedState ? 'connected' : 'disconnected'
-       }
-  }
-
-  /**
-   * Returns the current map of known entities and their states.
-   * The key is the entity ID, the value is the cached entity state.
-   * @returns {Map<string, any>} A map of entity IDs to their state objects.
-   */
-  public getEntities(): Map<string, any> {
-      return new Map(this.currentEntities);
-  }
-
-  async move(key: string, isDown: boolean): Promise<void> {
-    if (!this.isConnected() || !this.controls) throw new Error('HyperfyService: Cannot move. Not connected or controls unavailable.')
-    if (typeof this.controls.setKey !== 'function') throw new Error('HyperfyService: controls.setKey method is missing.')
-    try {
-      console.debug(`HyperfyService move: key=${key}, isDown=${isDown}`)
-      this.controls.setKey(key, isDown)
-    } catch (error: any) {
-      console.error('Error setting key:', error.message, error.stack)
-      throw error
-    }
-  }
-
-  /**
-   * Simulates using an item by pressing a number key (1-9).
-   */
-  async useItem(slot: number): Promise<void> {
-     if (!this.isConnected() || !this.controls) {
-       throw new Error('HyperfyService: Cannot use item. Controls not ready.');
-     }
-     if (slot < 1 || slot > 9) {
-        throw new Error(`HyperfyService: Invalid item slot ${slot}. Must be between 1 and 9.`);
-     }
-     if (typeof this.controls.setKey !== 'function') {
-        throw new Error('HyperfyService: controls.setKey method is missing.');
-     }
-
-     const keyName = `key${slot}`;
-     console.info(`[Action] Simulating 'Use Item' action (Pressing '${keyName}' briefly)`);
-
-     try {
-        this.controls.setKey(keyName, true);
-        // Short delay to simulate a press
-        await new Promise(resolve => setTimeout(resolve, 100));
-        this.controls.setKey(keyName, false);
-        console.info(`[Action] 'Use Item' simulation complete (Released '${keyName}').`);
-     } catch (error: any) {
-        console.error(`[Action] Error during useItem simulation for slot ${slot}:`, error);
-        // Attempt to release the key even if there was an error during the wait
-        try {
-             this.controls.setKey(keyName, false);
-        } catch (releaseError) {
-             console.error(`[Action] Failed to release ${keyName} key after error:`, releaseError);
-        }
-        throw error; // Re-throw original error
-     }
   }
 
   /**
@@ -800,87 +541,6 @@ export class HyperfyService extends Service {
           console.error(`[Action] Error during changeName to "${newName}":`, error);
           throw error;
       }
-  }
-
-  private startEntityUpdates(intervalMs = HYPERFY_ENTITY_UPDATE_INTERVAL): void {
-    if (this.entityUpdateIntervalId) clearInterval(this.entityUpdateIntervalId)
-
-    this.entityUpdateIntervalId = setInterval(() => {
-        if (!this.isConnected() || !this.world?.entities?.player) {
-             if (this.agentState.position || this.agentState.rotation) {
-                 console.debug("[Entity Update] Clearing agent state (disconnected or player missing).")
-                 this.agentState = { position: null, rotation: null }
-             }
-             return
-        }
-
-        const playerEntity = this.world.entities.player
-        let updated = false
-        if (playerEntity?.base?.position instanceof THREE.Vector3) {
-             const newPosArray = playerEntity.base.position.toArray()
-             if (JSON.stringify(newPosArray) !== JSON.stringify(this.agentState.position)) {
-                 this.agentState.position = newPosArray
-                 updated = true
-             }
-        } else if (this.agentState.position) {
-             this.agentState.position = null
-             updated = true
-        }
-
-        if (playerEntity?.base?.quaternion instanceof THREE.Quaternion) {
-            const newRotArray = playerEntity.base.quaternion.toArray()
-             if (JSON.stringify(newRotArray) !== JSON.stringify(this.agentState.rotation)) {
-                 this.agentState.rotation = newRotArray
-                 updated = true
-             }
-        } else if (this.agentState.rotation) {
-            this.agentState.rotation = null
-             updated = true
-        }
-
-    }, intervalMs)
-    console.info(`[Entity Update] Started interval for agent state sync every ${intervalMs}ms.`)
-  }
-
-  private stopEntityUpdates(): void {
-    if (this.entityUpdateIntervalId) {
-      clearInterval(this.entityUpdateIntervalId)
-      this.entityUpdateIntervalId = null
-      console.info('[Entity Update] Stopped.')
-    }
-  }
-
-  private logCurrentEntities(): void {
-     if (!this.world || !this.currentEntities || !this.isConnectedState) return
-     const entityCount = this.currentEntities.size
-     const agentPlayerId = this.world?.entities?.player?.data?.id
-
-     console.info(`--- [Hyperfy Service Entity Log - Time: ${this.world.time?.toFixed(2)}s] --- (${entityCount} entities) ---`)
-     this.currentEntities.forEach((entityState, id) => {
-        let logMessage = `  ID: ${id.substring(0,8)}..., Type: ${entityState.type || 'unknown'}`
-        const name = entityState.name
-        if (name) {
-             logMessage += `, Name: ${name}`
-             if (id === agentPlayerId) {
-                 logMessage += ' (Self)'
-             }
-        }
-
-        if (entityState.position) {
-             const pos = entityState.position.map((p: number) => p.toFixed(2)).join(', ')
-             logMessage += `, Pos: (${pos})`
-        } else {
-            logMessage += `, Pos: (N/A)`
-        }
-         if (entityState.rotation) {
-             const rot = entityState.rotation.map((r: number) => r.toFixed(2))
-             logMessage += `, Rot: (x:${rot[0]}, y:${rot[1]}, z:${rot[2]}, w:${rot[3]})`
-         } else {
-         }
-
-        console.info(logMessage)
-     })
-     console.info(`--- [End Hyperfy Service Entity Log] ---`)
   }
 
   async stop(): Promise<void> {
@@ -940,69 +600,6 @@ export class HyperfyService extends Service {
       }
     })
   }
-  
-  private startSimulation(): void {
-    if (this.tickIntervalId) clearTimeout(this.tickIntervalId);
-    const tickIntervalMs = 1000 / HYPERFY_TICK_RATE;
-    let lastTickTime = performance.now();
-    let lastTickErrorLogTime = 0; // Track last error log time
-    const tickErrorLogInterval = 10000; // Log tick errors max every 10 seconds
-
-    const tickLoop = () => {
-      if (!this.world || !this.isConnectedState) {
-          // If disconnected or world gone, stop the loop
-          if (this.tickIntervalId) {
-               console.info('[Sim] Stopping tick loop (world/connection lost).');
-               clearTimeout(this.tickIntervalId);
-               this.tickIntervalId = null;
-          }
-          return;
-      }
-
-      const now = performance.now();
-      try {
-        // Wrap in try-catch to handle browser API calls that might fail in Node
-        if (typeof this.world.tick === 'function') {
-          this.world.tick(now);
-        }
-      } catch (e: any) { // Type the error
-        // Check if it's the specific ReferenceError and log less frequently
-        if (e instanceof ReferenceError && e.message?.includes('document is not defined')) {
-          if (now - lastTickErrorLogTime > tickErrorLogInterval) {
-            console.warn('[HyperfyService] Suppressed frequent ReferenceError during world.tick (document not defined)');
-            lastTickErrorLogTime = now;
-          }
-        } else {
-          // Log other errors normally
-          console.error('[HyperfyService] Error during world.tick:', e);
-        }
-        // Don't stop the loop on error, just log and continue
-      }
-
-      lastTickTime = now;
-      // Schedule next tick precisely
-      const elapsed = performance.now() - now;
-      const delay = Math.max(0, tickIntervalMs - elapsed);
-      // Ensure we don't reschedule if stopSimulation was called during tick
-      if (this.tickIntervalId !== null) { // Check if cleared
-          this.tickIntervalId = setTimeout(tickLoop, delay);
-      }
-    };
-
-    console.info(`[HyperfyService] Starting simulation tick at ${HYPERFY_TICK_RATE}Hz.`);
-    this.tickIntervalId = setTimeout(tickLoop, 0); // Start immediately
-  }
-
-  private stopSimulation(): void {
-    if (this.tickIntervalId) {
-      clearTimeout(this.tickIntervalId);
-      this.tickIntervalId = null; // Set to null immediately
-      console.info('[Sim] Tick stopped.');
-    }
-  }
-
-  private startRandomChatting(): void { /* ... existing ... */ }
-  private stopRandomChatting(): void { /* ... existing ... */ }
 
   getEmoteManager() {
     return this.emoteManager;

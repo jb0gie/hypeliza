@@ -29,7 +29,6 @@ export const hyperfyProvider: Provider = {
       }
 
       try {
-        const state = service.getState();
         const world = service.getWorld();
         const messageManager = service.getMessageManager();
         const _currentWorldId = service.currentWorldId;
@@ -113,22 +112,12 @@ export const hyperfyProvider: Provider = {
         const formattedText =
           `# Hyperfy World State\n\n${agentText}${categorizedSummary}\n\n${actionText}\n\n${equipText}\n\n${chatText}\n\n${animationText}`;
 
-        const entitiesData = Object.fromEntries(state.entities);
-        
-
         return {
           text: formattedText,
           values: { // Simplified values for quick access
             hyperfyStatus: formattedText,
-            agentPosition: JSON.stringify(state.agent?.position), // Keep as JSON string
-            // agentRotation: JSON.stringify(state.agent?.rotation), // Maybe omit rotation from simple values
-            entityCount: state.entities.size,
-            receivedMessageContent: _message.content.text
           },
-          data: { // Pass more structured raw data including the entities object
-              status: state.status,
-              agent: state.agent,
-              entities: entitiesData, // Pass the object form
+          data: {
           },
         };
       } catch (error: any) { // Add type annotation for error
