@@ -20,6 +20,7 @@ import { BehaviorManager } from "./managers/behavior-manager.js"
 import { EmoteManager } from './managers//emote-manager.js'
 import { MessageManager } from './managers//message-manager.js'
 import { VoiceManager } from './managers//voice-manager.js'
+import { PuppeteerManager } from './managers/puppeteer-manager.js'
 import { hashFileBuffer } from './utils'
 
 const LOCAL_AVATAR_PATH = process.env.HYPERFY_AGENT_AVATAR_PATH || './avatars/avatar.vrm'
@@ -49,6 +50,7 @@ export class HyperfyService extends Service {
   private emoteManager: EmoteManager;
   private messageManager: MessageManager;
   private voiceManager: VoiceManager;
+  private puppeteerManager: PuppeteerManager;
 
   public get currentWorldId(): UUID | null {
     return this._currentWorldId
@@ -186,6 +188,7 @@ export class HyperfyService extends Service {
       this.emoteManager = new EmoteManager(this.runtime);
       this.messageManager = new MessageManager(this.runtime);
       this.voiceManager = new VoiceManager(this.runtime);
+      this.puppeteerManager = new PuppeteerManager(this.runtime);
       this.behaviorManager = new BehaviorManager(this.runtime);
 
       this.startAppearancePolling()
@@ -615,5 +618,9 @@ export class HyperfyService extends Service {
 
   getVoiceManager() {
     return this.voiceManager;
+  }
+
+  getPuppeteerManager() {
+    return this.puppeteerManager;
   }
 }
