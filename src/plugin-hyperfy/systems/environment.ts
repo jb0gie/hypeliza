@@ -38,7 +38,7 @@ export class AgentEnvironment extends System {
     super(world)
   }
 
-  init() {
+  async start() {
     this.base = {
       model: 'assets/base-environment.glb',
       bg: '',
@@ -50,9 +50,6 @@ export class AgentEnvironment extends System {
       fogFar: null,
       fogColor: null,
     }
-  }
-
-  async start() {
     this.buildCSM()
     this.updateSky()
 
