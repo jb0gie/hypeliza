@@ -24,8 +24,9 @@ export const character: Character = {
   name: 'Hyperliza', // Keep the name, or maybe suggest a friendlier one if desired? Sticking with Hyperliza for now.
   plugins: [
     '@elizaos/plugin-sql',
-    ...(process.env.ANTHROPIC_API_KEY ? ['@elizaos/plugin-groq'] : []),
+    ...(process.env.ANTHROPIC_API_KEY ? ['@elizaos/plugin-anthropic'] : []),
     ...(process.env.OPENAI_API_KEY ? ['@elizaos/plugin-openai'] : []),
+    ...(process.env.GROQ_API_KEY ? ['@elizaos/plugin-groq'] : []),
   ],
   settings: {
     secrets: {},
