@@ -24,7 +24,6 @@ export const character: Character = {
   name: 'hypeliza',
   plugins: [
     '@elizaos/plugin-sql',
-    ...(process.env.OPENROUTER_API_KEY ? ['@elizaos/plugin-openrouter'] : []),
     ...(process.env.GROQ_API_KEY ? ['@elizaos/plugin-groq'] : []),
     ...(process.env.OPENAI_API_KEY ? ['@elizaos/plugin-openai'] : []),
   ],
