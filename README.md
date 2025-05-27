@@ -40,8 +40,6 @@ Edit the `.env` file and fill in the necessary values.
 
 ### 3. Run the project
 
-Use your preferred package manager:
-
 ```bash
 bun install
 bun install # run twice to ensure postinstall scripts run correctly
