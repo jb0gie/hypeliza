@@ -105,6 +105,10 @@ export class HyperfyService extends Service {
       this.world = world
 
       this.puppeteerManager = new PuppeteerManager(this.runtime);
+      this.emoteManager = new EmoteManager(this.runtime);
+      this.messageManager = new MessageManager(this.runtime);
+      this.voiceManager = new VoiceManager(this.runtime);
+      this.behaviorManager = new BehaviorManager(this.runtime);
 
       ;(world as any).playerNamesMap = this.playerNamesMap
 
@@ -189,15 +193,13 @@ export class HyperfyService extends Service {
         console.info(`Populated ${this.processedMsgIds.size} processed message IDs from history.`)
       }
 
+      this.voiceManager.start();
+
+      this.behaviorManager.start();
+
       this.subscribeToHyperfyEvents()
 
       this.isConnectedState = true
-
-      this.emoteManager = new EmoteManager(this.runtime);
-      this.messageManager = new MessageManager(this.runtime);
-      this.voiceManager = new VoiceManager(this.runtime);
-      
-      this.behaviorManager = new BehaviorManager(this.runtime);
 
       this.startAppearancePolling()
 
@@ -408,9 +410,7 @@ export class HyperfyService extends Service {
               
               await this.runtime.updateEntity(entity)
             }
-            
-            this.behaviorManager.start();
-            
+
              // --- Set Name (if not already done) ---
              if (!pollingTasks.name) {
                  console.info(`[Name Polling] Player (ID: ${agentPlayerId}), network ready. Attempting name...`);

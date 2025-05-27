@@ -24,7 +24,9 @@ export class VoiceManager {
 
   constructor(runtime: IAgentRuntime) {
     this.runtime = runtime;
+  }
 
+  start() {
     const service = this.getService();
     const world = service.getWorld();
 
