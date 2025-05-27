@@ -1,6 +1,7 @@
-# Eliza x Hyperfy Agent
+# `hypeliza` elizaos x Hyperfy 
 
-This project wraps some plugin development of a Hyperfy client that allows Eliza to connect to a Hyperfy world like a user. In the future, the Hyperfy portion may be broken out and published as a separate plugin — for now, it's included here.
+This project wraps some plugin development of a Hyperfy client that allows Eliza to connect to a Hyperfy world like a user. 
+In the future, the Hyperfy portion may be broken out and published as a separate plugin — for now, it's included here.
 
 ## 💠 Getting Started
 
