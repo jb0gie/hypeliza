@@ -22,7 +22,7 @@ import { MessageManager } from './managers//message-manager.js'
 import { VoiceManager } from './managers//voice-manager.js'
 import { hashFileBuffer } from './utils'
 
-const LOCAL_AVATAR_PATH = process.env.HYPERFY_AGENT_AVATAR_PATH || './avatar.vrm'
+const LOCAL_AVATAR_PATH = process.env.HYPERFY_AGENT_AVATAR_PATH || './avatars/avatar.vrm'
 
 const HYPERFY_WS_URL = process.env.WS_URL || 'wss://chill.hyperfy.xyz/ws'
 const HYPERFY_APPEARANCE_POLL_INTERVAL = 30000
