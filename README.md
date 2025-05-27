@@ -10,7 +10,7 @@ In the future, the Hyperfy portion may be broken out and published as a separate
 Clone this repository using:
 
 ```bash
-git clone --recurse-submodules https://github.com/elizaOS/eliza-3d-hyperfy-starter.git
+git clone --recurse-submodules https://github.com/jb0gie/hypeliza.git
 ```
 
 ### 2. Setup environment variables
