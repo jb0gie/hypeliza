@@ -196,7 +196,10 @@ export class AgentLoader extends System {
 
   async parseGLB(type: string, key: string, url: string) {
     const puppeteerManager = PuppeteerManager.getInstance()
-    const bytes = await puppeteerManager.loadGlbBytes(url);
+    const bytes = 
+      type === 'avatar' ? 
+        await puppeteerManager.loadVRMBytes(url) : 
+        await puppeteerManager.loadGlbBytes(url);
     const arrayBuffer = Uint8Array.from(bytes).buffer;
   
     const gltf: THREE.GLTF = await new Promise((ok, bad) =>
