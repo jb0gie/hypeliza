@@ -7,4 +7,5 @@ bun.lock
 package-lock.json
 .env
 local.json
+localstorage.json
 /elizadb

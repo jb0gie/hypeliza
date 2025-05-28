@@ -18,7 +18,7 @@ import { hyperfyProvider } from './providers/world';
 // import { hyperfyEmoteProvider } from './providers/emote';
 
 // --- Hardcoded values matching agent/index.mjs ---
-const HYPERFY_WS_URL = process.env.WS_URL || 'wss://chill.hyperfy.xyz/ws'
+const HYPERFY_WS_URL = process.env.WS_URL || 'wss://255242621.xyz/ws'
 // ---------------------------------------------
 
 
