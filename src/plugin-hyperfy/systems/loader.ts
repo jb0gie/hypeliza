@@ -7,6 +7,7 @@ import { createEmoteFactory } from "../hyperfy/src/core/extras/createEmoteFactor
 import { AgentAvatar } from "./avatar.js";
 import { PuppeteerManager } from "../managers/puppeteer-manager.js";
 import { promises as fsPromises } from 'fs';
+import { resolveUrl } from "../utils.js";
 
 // import { VRMLoaderPlugin } from "@pixiv/three-vrm";
 // --- Mock Browser Environment for Loaders ---
@@ -105,45 +106,12 @@ export class AgentLoader extends System {
   }
   // ---------------------------
 
-  resolveUrl(url) {
-    // ... (resolveUrl implementation remains the same) ...
-    if (typeof url !== "string") {
-      console.error(`[AgentLoader] Invalid URL type provided: ${typeof url}`);
-      return null;
-    }
-    if (url.startsWith("asset://")) {
-      if (!this.world.assetsUrl) {
-        console.error(
-          "[AgentLoader] Cannot resolve asset:// URL, world.assetsUrl not set."
-        );
-        return null;
-      }
-      const filename = url.substring("asset://".length);
-      const baseUrl = this.world.assetsUrl.replace(/[/\\\\]$/, ""); // Remove trailing slash (either / or \)
-      return `${baseUrl}/${filename}`;
-    }
-    if (url.startsWith("http://") || url.startsWith("https://")) {
-      return url;
-    }
-    console.warn(
-      `[AgentLoader] Cannot resolve potentially relative URL without base: ${url}`
-    );
-    return url;
-  }
-
   async load(type, url) {
     const key = `${type}/${url}`;
     if (this.promises.has(key)) return this.promises.get(key);
 
-    let resolvedUrl = this.resolveUrl(url);
+    let resolvedUrl = await resolveUrl(url, this.world);
 
-    const isLocal = !/^https?:\/\//.test(resolvedUrl);
-    if (isLocal) {
-      const fileBuffer = await fsPromises.readFile(resolvedUrl);
-      const base64 = fileBuffer.toString('base64');
-      resolvedUrl = `data:image/vnd.radiance;base64,${base64}`;
-    }
-    
     const promise = fetch(resolvedUrl)
       .then(async (response) => {
         if (!response.ok) {

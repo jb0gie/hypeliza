@@ -6,6 +6,7 @@ import puppeteer from 'puppeteer'
 import { IAgentRuntime, ModelType } from '@elizaos/core'
 import { HyperfyService } from '../service.js'
 import * as THREE from 'three';
+import { resolveUrl } from '../utils.js';
 
 export class PuppeteerManager {
   private static instance: PuppeteerManager | null = null
@@ -305,45 +306,28 @@ export class PuppeteerManager {
     const world = service.getWorld()
     const sceneJson = world.stage.scene.toJSON()
 
-    const resolveUrl = (url) => {
-      // ... (resolveUrl implementation remains the same) ...
-      if (typeof url !== "string") {
-        console.error(`[AgentLoader] Invalid URL type provided: ${typeof url}`);
-        return null;
-      }
-      if (url.startsWith("asset://")) {
-        if (!world.assetsUrl) {
-          console.error(
-            "[AgentLoader] Cannot resolve asset:// URL, world.assetsUrl not set."
-          );
-          return null;
-        }
-        const filename = url.substring("asset://".length);
-        const baseUrl = world.assetsUrl.replace(/[/\\\\]$/, ""); // Remove trailing slash (either / or \)
-        return `${baseUrl}/${filename}`;
-      }
-      if (url.startsWith("http://") || url.startsWith("https://")) {
-        return url;
-      }
-      console.warn(
-        `[AgentLoader] Cannot resolve potentially relative URL without base: ${url}`
-      );
-      return url;
-    }
-
-    const players = Array.from(world.entities.players.entries()).map(([key, value]) => ({
-      id: key,
-      avatarUrl: resolveUrl(value.avatarUrl),
-      position: value.base.position.toArray(),
-      scale: value.base.scale.toArray(),
-      quaternion: [
-        value.base.quaternion.x,
-        value.base.quaternion.y,
-        value.base.quaternion.z,
-        value.base.quaternion.w,
-      ]
-    }));
-
+    const agentId = world.entities.player.data.id;
+    console.log(world.entities.player.data)
+    const players = await Promise.all(
+      Array.from(world.entities.players.entries())
+        .filter(([_, value]) => value.data.id !== agentId)
+        .map(async ([key, value]) => {
+          const avatarUrl = await resolveUrl(value.avatarUrl, world);
+          return {
+            id: key,
+            avatarUrl,
+            position: value.base.position.toArray(),
+            scale: value.base.scale.toArray(),
+            quaternion: [
+              value.base.quaternion.x,
+              value.base.quaternion.y,
+              value.base.quaternion.z,
+              value.base.quaternion.w,
+            ],
+          };
+        })
+    );
+    
     const STRIP_SLOTS = this.STRIP_SLOTS;
     await this.page.evaluate(async (sceneJson, STRIP_SLOTS, players) => {
       const THREE = window.THREE;
@@ -353,10 +337,13 @@ export class PuppeteerManager {
       // Rehydrate materials
       loadedScene.traverse(obj => {
         if (!obj.isMesh || !obj.material) return;
+
+        console.log("ibjjj", obj)
   
         const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
   
         mats.forEach(mat => {
+          console.log("matatta", mat)
           const id = mat.userData.materialId;
           if (!id) return;
   
@@ -823,47 +810,39 @@ export class PuppeteerManager {
       return [...new Uint8Array(buffer)];
     }, url);
   }
+
+  async registerTexture(url: string, slot: string): Promise<string> {
+    await this.init();
+  
+    return this.page.evaluate(async (url, slot) => {
+      if (!window.texturesMap) window.texturesMap = new Map();
+  
+      const loader = window.TextureLoader;
+      const texture = await new Promise<THREE.Texture>((resolve, reject) => {
+        loader.load(
+          url,
+          tex => resolve(tex),
+          undefined,
+          err => reject(err)
+        );
+      });
+  
+      const uuid = window.crypto.randomUUID();
+      window.texturesMap.set(`${uuid}:${slot}`, texture);
+  
+      return uuid;
+    }, url, slot);
+  }
+  
   
 
   public async loadEnvironmentHDR(url: string): Promise<void> {
     await this.init();
     const service = this.getService()
     const world = service.getWorld()
-    const resolveUrl = (url) => {
-      // ... (resolveUrl implementation remains the same) ...
-      if (typeof url !== "string") {
-        console.error(`[AgentLoader] Invalid URL type provided: ${typeof url}`);
-        return null;
-      }
-      if (url.startsWith("asset://")) {
-        if (!world.assetsUrl) {
-          console.error(
-            "[AgentLoader] Cannot resolve asset:// URL, world.assetsUrl not set."
-          );
-          return null;
-        }
-        const filename = url.substring("asset://".length);
-        const baseUrl = world.assetsUrl.replace(/[/\\\\]$/, ""); // Remove trailing slash (either / or \)
-        return `${baseUrl}/${filename}`;
-      }
-      if (url.startsWith("http://") || url.startsWith("https://")) {
-        return url;
-      }
-      console.warn(
-        `[AgentLoader] Cannot resolve potentially relative URL without base: ${url}`
-      );
-      return url;
-    }
 
-    url = resolveUrl(url);
+    url = await resolveUrl(url, world);
 
-    const isLocal = !/^https?:\/\//.test(url);
-    if (isLocal) {
-      const fileBuffer = await fsPromises.readFile(url);
-      const base64 = fileBuffer.toString('base64');
-      url = `data:image/vnd.radiance;base64,${base64}`;
-    }
-  
     await this.page.evaluate(async (url) => {
       const loader = new window.RGBELoader();
       const hdrTexture = await new Promise((resolve, reject) => {

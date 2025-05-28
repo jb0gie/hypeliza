@@ -5,6 +5,7 @@ import { System } from '../hyperfy/src/core/systems/System.js'
 import { logger } from '@elizaos/core';
 import * as THREE from 'three';
 import { PuppeteerManager } from "../managers/puppeteer-manager.js";
+import { resolveUrl } from '../utils.js';
 
 interface SkyHandle {
   node: any
@@ -41,7 +42,7 @@ export class AgentEnvironment extends System {
   async start() {
     this.base = {
       model: 'assets/base-environment.glb',
-      bg: '',
+      bg: 'assets/day2-2k.jpg',
       hdr: 'assets/day2.hdr',
       sunDirection: new THREE.Vector3(-1, -2, -2).normalize(),
       sunIntensity: 1,
@@ -89,7 +90,7 @@ export class AgentEnvironment extends System {
   async updateSky() {
     if (!this.sky) {
       const geometry = new THREE.SphereGeometry(1000, 60, 40)
-      const material = new THREE.MeshBasicMaterial({ side: THREE.BackSide })
+      const material = new THREE.MeshBasicMaterial({side: THREE.BackSide});      
       this.sky = new THREE.Mesh(geometry, material)
       this.sky.geometry.computeBoundsTree()
       this.sky.material.fog = false
@@ -103,7 +104,7 @@ export class AgentEnvironment extends System {
 
     const base = this.base
     const node = this.skys[this.skys.length - 1]?.node
-    const bgUrl = node?._bg || base.bg
+    let bgUrl = node?._bg || base.bg
     const hdrUrl = node?._hdr || base.hdr
     const sunDirection = node?._sunDirection || base.sunDirection
     const sunIntensity = isNumber(node?._sunIntensity) ? node._sunIntensity : base.sunIntensity
@@ -111,10 +112,21 @@ export class AgentEnvironment extends System {
     const fogNear = isNumber(node?._fogNear) ? node._fogNear : base.fogNear
     const fogFar = isNumber(node?._fogFar) ? node._fogFar : base.fogFar
     const fogColor = isString(node?._fogColor) ? node._fogColor : base.fogColor
-
+    const puppeteerManager = PuppeteerManager.getInstance()
     const n = ++this.skyN
+    let bgUUID
+    if (bgUrl) {
+      bgUrl = await resolveUrl(bgUrl, this.world);
+      bgUUID = await puppeteerManager.registerTexture(bgUrl, 'map');
+    }
+    if (bgUUID) {
+      this.sky.material.userData.materialId = bgUUID;
+      this.sky.visible = true
+    } else {
+      this.sky.visible = false
+    }
+
     if (hdrUrl) {
-      const puppeteerManager = PuppeteerManager.getInstance()
       await puppeteerManager.loadEnvironmentHDR(hdrUrl);
     }
     if (n !== this.skyN) return
