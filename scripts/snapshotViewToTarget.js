@@ -16,7 +16,7 @@ window.snapshotViewToTarget = async function(playerData, targetPosition) {
   const dir = new THREE.Vector3().subVectors(playerPos, targetPos).normalize();
 
   // Eye is a bit behind the target toward player
-  const eye = new THREE.Vector3().copy(targetPos).addScaledVector(dir, 3); // move back 3 units
+  const eye = new THREE.Vector3().copy(targetPos).addScaledVector(dir, 4); // move back 4 units
   eye.y = playerData.position[1] + 1; // elevate eye slightly
 
   const target = new THREE.Vector3(...targetPosition);
