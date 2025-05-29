@@ -195,7 +195,7 @@ export class HyperfyService extends Service {
 
       this.voiceManager.start();
 
-      // this.behaviorManager.start();
+      this.behaviorManager.start();
 
       this.subscribeToHyperfyEvents()
 
