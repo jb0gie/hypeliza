@@ -1,4 +1,4 @@
-////@ts-nocheck
+//@ts-nocheck
 import path from 'path'
 import fs from 'fs'
 import { promises as fsPromises } from 'fs';
@@ -46,7 +46,7 @@ export class PuppeteerManager {
     if (!this.initPromise) {
       this.initPromise = (async () => {
         this.browser = await puppeteer.launch({
-          headless: false,
+          // headless: false,
           defaultViewport: null,
           slowMo: 50
         })
@@ -55,7 +55,7 @@ export class PuppeteerManager {
         const filePath = path.resolve('puppeteer/index.html')
 
         await this.page.goto(`file://${filePath}`, { waitUntil: 'load' })
-        
+
         await this.injectScripts([
           'scripts/createVRMFactory.js',
           'scripts/snapshotEquirectangular.js',
