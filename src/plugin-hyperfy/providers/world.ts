@@ -44,12 +44,17 @@ export const hyperfyProvider: Provider = {
           const name = entity?.data?.name || entity?.blueprint?.name || 'Unnamed';
           const type = entity?.data?.type || 'unknown';
           const pos = entity?.base?.position || entity?.root?.position;
+          const quat = entity?.base?.quaternion || entity?.root?.quaternion;
           const posStr = pos && (pos instanceof THREE.Vector3 || pos instanceof Vector3Enhanced)
             ? `[${[pos.x, pos.y, pos.z].map(p => p.toFixed(2)).join(', ')}]`
             : 'N/A';
 
           if (id === agentId) {
-            agentText = `## Agent Info (You)\nEntity ID: ${id}, Name: ${name}, Position: ${posStr}`;
+            const quatStr = quat && (quat instanceof THREE.Quaternion)
+              ? `[${[quat.x, quat.y, quat.z, quat.w].map(q => q.toFixed(4)).join(', ')}]`
+              : 'N/A';
+            
+            agentText = `## Agent Info (You)\nEntity ID: ${id}, Name: ${name}, Position: ${posStr}, Quaternion: ${quatStr}`;
             continue;
           }
 
