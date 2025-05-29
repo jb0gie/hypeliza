@@ -189,8 +189,6 @@ export const hyperfyScenePerceptionAction: Action = {
       return;
     }
 
-    console.log("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@", selectionRaw);
-    
     const selection = parseKeyValueXml(selectionRaw);
     if (!selection || selection.snapshotType === 'NONE') {
       await callback({
