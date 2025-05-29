@@ -107,7 +107,26 @@ export const hyperfyProvider: Provider = {
 
 
         const chatHistory = await messageManager.getRecentMessages(elizaRoomId);
-        const chatText = `## In-World Messages\n${chatHistory}`;
+        let chatText = `## In-World Messages\n### Chat History\n${chatHistory}`;
+
+        const messageText = _message.content?.text?.trim();
+        if (messageText) {
+          const senderId = _message.entityId;
+          const senderEntity = await runtime.getEntityById(senderId);
+          const senderName =
+            senderEntity?.metadata?.username ||
+            senderEntity?.names?.[0] ||
+            'Unknown User';
+
+          const receivedMessageSection = [
+            `### Received Message`,
+            `${senderName}: ${messageText}`,
+            `\n### Focus your response`,
+            `You are replying to the above message from **${senderName}**. Keep your answer relevant to that message. Do not repeat earlier replies unless the sender asks again.`
+          ].join('\n');
+
+          chatText += `\n\n${receivedMessageSection}`;
+        }
 
         const animationListText = EMOTES_LIST.map(
           (e) => `- **${e.name}**: ${e.description}`

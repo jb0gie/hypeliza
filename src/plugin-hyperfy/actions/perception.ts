@@ -37,19 +37,29 @@ Select the strategy that best matches the latest user request and the known game
 
 • <snapshotType>${SnapshotType.LOOK_AT_ENTITY}</snapshotType> — choose this when the user refers to a specific object, character, or item that exists in the Hyperfy World State. Place the target entity’s **entityId** in <parameter>.
 
-If none of the above applies, return exactly:
-<response>null</response>
-</instructions>
+If you are **not absolutely confident** about which strategy fits best — or if the request is **ambiguous, vague, or could match multiple strategies** — you **MUST NOT guess**.
+
+Instead, generate a response that politely asks the user for clarification.
+
+Use the following format:
+<response>
+  <snapshotType>NONE</snapshotType>
+  <parameter>Your clarification question here</parameter>
+</response>
+
+Example:
+<response>
+  <snapshotType>NONE</snapshotType>
+  <parameter>Your in-character clarification question here (e.g., "Do you mean that glowing statue over there?" or "Which direction should I look — left, right...?")</parameter>
+</response>
+
+DO NOT invent a snapshotType unless it is clearly and directly supported by the user’s message.
 
 <output>
 <response>
   <snapshotType>...</snapshotType>
   <parameter>...</parameter>
 </response>
-
-OR
-
-<response>null</response>
 </output>`;
 
 const detailedImageDescriptionTemplate = `
@@ -178,10 +188,16 @@ export const hyperfyScenePerceptionAction: Action = {
       await callback({ thought: 'Cannot decide how to look.', metadata: { error: 'selector_failure' } });
       return;
     }
+
+    console.log("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@", selectionRaw);
     
     const selection = parseKeyValueXml(selectionRaw);
-    if (!selection || !selection.snapshotType) {
-      await callback({ thought: 'No snapshot type chosen.', metadata: { error: 'invalid_selector_output' } });
+    if (!selection || selection.snapshotType === 'NONE') {
+      await callback({
+        thought: 'The snapshot strategy was unclear.',
+        text: selection.parameter || 'Can you clarify what you want me to observe?',
+        metadata: { error: 'unclear_snapshot_request' }
+      });
       return;
     }
 

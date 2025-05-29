@@ -188,6 +188,7 @@ export class MessageManager {
   }) {
     const messageStrings = messages
       .filter((message: Memory) => message.entityId)
+      .reverse()
       .map((message: Memory) => {
         const content = message.content as Content;
         const messageText = content.text || "";
