@@ -178,8 +178,7 @@ export const hyperfyScenePerceptionAction: Action = {
       await callback({ thought: 'Cannot decide how to look.', metadata: { error: 'selector_failure' } });
       return;
     }
-    console.log("selectionnnn", selectionRaw);
-
+    
     const selection = parseKeyValueXml(selectionRaw);
     if (!selection || !selection.snapshotType) {
       await callback({ thought: 'No snapshot type chosen.', metadata: { error: 'invalid_selector_output' } });
@@ -250,8 +249,6 @@ export const hyperfyScenePerceptionAction: Action = {
 
     const fullSceneDescription = `${scenePerceptionHeader}\n\n${sceneDescription}`;
 
-    console.log("dessssssss", fullSceneDescription)
-
     /* generate final XML response */
     const responsePrompt = composePromptFromState({ state, template: responseGenerationTemplate(fullSceneDescription) });
     let xmlRaw: string;
@@ -263,11 +260,8 @@ export const hyperfyScenePerceptionAction: Action = {
       return;
     }
 
-    console.log("debugggggg", responsePrompt);
-
     const parsed = parseKeyValueXml(xmlRaw);
 
-    console.log("parsedddd", parsed);
     if (!parsed) {
       await callback({ thought: 'Malformed XML.', metadata: { error: 'xml_parse_failure', xmlRaw } });
       return;
