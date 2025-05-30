@@ -169,6 +169,9 @@ export const hyperfyScenePerceptionAction: Action = {
     const service = runtime.getService<HyperfyService>(HyperfyService.serviceType);
     const world = service?.getWorld();
     const puppeteerManager = service?.getPuppeteerManager();
+    const controls = world.controls;
+
+    controls.stopAllActions();
 
     if (!service || !world || !puppeteerManager) {
       logger.error('Hyperfy service/world unavailable.');

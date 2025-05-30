@@ -187,16 +187,6 @@ export class AgentControls extends System {
     walkLoop();
   }
 
-  /**
-   * Stops the random walk process.
-   */
-  public stopRandomWalk() {
-    this._isRandomWalking = false;
-    this._currentWalkToken?.abort();
-    this._currentWalkToken = null;
-    this.stopNavigation("random walk stopped");
-  }  
-
   // --- Navigation Methods --- >
 
   /**
@@ -259,36 +249,6 @@ export class AgentControls extends System {
   public async goto(x: number, z: number): Promise<void> {
     this.stopRandomWalk();
     await this.startNavigation(x, z);
-  }
-
-  /**
-   * Stops the current navigation process AND random walk if active.
-   */
-  public stopNavigation(reason: string = "commanded"): void {
-    if (this._isNavigating) {
-        logger.info(`[Controls Navigation] Stopping navigation (${reason}). Reason stored.`);
-
-        if (this._navigationResolve) {
-          this._navigationResolve();
-          this._navigationResolve = null;
-        }
-
-        this._isNavigating = false;
-        this._navigationTarget = null;
-        
-        // Release movement keys
-        try {
-            this.setKey('keyW', false);
-            this.setKey('keyA', false);
-            this.setKey('keyS', false);
-            this.setKey('keyD', false);
-            this.setKey('shiftLeft', false);
-            logger.debug("[Controls Navigation] Movement keys released.");
-        } catch (e) {
-            logger.error("[Controls Navigation] Error releasing keys on stop:", e);
-        }
-        this._currentNavKeys = { forward: false, backward: false, left: false, right: false };
-    }
   }
 
 
@@ -383,6 +343,46 @@ export class AgentControls extends System {
     this._isRotating = false;
   }
 
+   /**
+   * Stops the random walk process.
+   */
+   public stopRandomWalk() {
+    this._isRandomWalking = false;
+    this._currentWalkToken?.abort();
+    this._currentWalkToken = null;
+    this.stopNavigation("random walk stopped");
+  }  
+
+   /**
+   * Stops the current navigation process AND random walk if active.
+   */
+   public stopNavigation(reason: string = "commanded"): void {
+    if (this._isNavigating) {
+        logger.info(`[Controls Navigation] Stopping navigation (${reason}). Reason stored.`);
+
+        if (this._navigationResolve) {
+          this._navigationResolve();
+          this._navigationResolve = null;
+        }
+
+        this._isNavigating = false;
+        this._navigationTarget = null;
+        
+        // Release movement keys
+        try {
+            this.setKey('keyW', false);
+            this.setKey('keyA', false);
+            this.setKey('keyS', false);
+            this.setKey('keyD', false);
+            this.setKey('shiftLeft', false);
+            logger.debug("[Controls Navigation] Movement keys released.");
+        } catch (e) {
+            logger.error("[Controls Navigation] Error releasing keys on stop:", e);
+        }
+        this._currentNavKeys = { forward: false, backward: false, left: false, right: false };
+    }
+  }
+
   public stopRotation() {
     if (this._isRotating) {
       logger.info("[Controls stopRotation] Rotation cancelled.");
@@ -392,6 +392,15 @@ export class AgentControls extends System {
       this._rotationTarget = null;
     }
   }  
+
+  public stopAllActions(reason: string = "stopAllActions called") {
+    logger.info(`[Controls] Stopping all actions. Reason: ${reason}`);
+    
+    this.stopRandomWalk();     // Also stops navigation
+    this.stopNavigation(reason);
+    this.stopRotation();
+  }
+  
   
   /**
    * Returns whether the agent is currently navigating towards a target.
