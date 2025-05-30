@@ -94,23 +94,8 @@ export class PuppeteerManager {
       throw new Error('Player entity not yet available');
     }
 
-    // Determine the rotation offset in radians based on direction
-    const rotationOffsetY: Record<'front' | 'back' | 'left' | 'right', number> = {
-      front: 0,
-      right: -Math.PI / 2,
-      back: Math.PI,
-      left: Math.PI / 2,
-    };
-  
-    // rotate the player
-    const baseQuat = player.base.quaternion.clone();
-    const yawQuat = new THREE.Quaternion().setFromEuler(
-      new THREE.Euler(0, rotationOffsetY[direction], 0, 'YXZ')
-    );
-    const newQuat = baseQuat.clone().multiply(yawQuat);
-    player.base.quaternion.copy(newQuat);
-    const euler = new THREE.Euler().setFromQuaternion(newQuat, 'YXZ');
-    player.cam.rotation.y = euler.y;
+    await world.controls.rotateTo(direction, 500);
+    world.controls.stopRotation();  
   
     await this.rehydrateSceneAssets();
   
