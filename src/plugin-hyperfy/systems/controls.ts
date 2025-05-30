@@ -193,6 +193,60 @@ export class AgentControls extends System {
   // --- Navigation Methods --- >
 
   /**
+   * Navigates toward an entity (by ID) until within stop distance.
+   */
+  public async followEntity(entityId: string, stopDistance: number = NAVIGATION_STOP_DISTANCE): Promise<void> {
+    this.stopRandomWalk();
+    this.stopNavigation("starting followEntity");
+
+    const token = new NavigationToken();
+    this._currentWalkToken = token;
+    this._isNavigating = true;
+
+    const tickDelay = (ms: number) => new Promise(res => setTimeout(res, ms));
+    const player = this.world.entities.player;
+
+    while (this._isNavigating && this._currentWalkToken === token && !token.aborted) {
+      const target = this.world.entities.items.get(entityId);
+      
+
+      if (!target) {
+        logger.warn(`[Controls followEntity] Target entity '${entityId}' not found or missing position.`);
+        this.stopNavigation("entity missing");
+        break;
+      }
+
+      if (!this._validatePlayerState("followEntity")) break;
+
+      const playerPos = v1.copy(player.base.position);
+      let targetPos = target?.base?.position || target?.root?.position;
+      targetPos = targetPos.clone();
+      const distance = playerPos.clone().setY(0).distanceTo(targetPos.clone().setY(0));
+
+      if (distance <= stopDistance) {
+        logger.info(`[Controls followEntity] Reached entity '${entityId}' within ${stopDistance}m.`);
+        this.stopNavigation("target reached");
+        break;
+      }
+
+      const direction = targetPos.clone().sub(playerPos).setY(0).normalize();
+      const desiredQuat = q1.setFromUnitVectors(FORWARD, direction);
+      player.base.quaternion = desiredQuat;
+      const yRot = e1.setFromQuaternion(player.base.quaternion, 'YXZ').y;
+      player.cam.rotation.y = yRot;
+
+      this.setKey('keyW', true);
+      this.setKey('keyS', false);
+      this.setKey('keyA', false);
+      this.setKey('keyD', false);
+      this.setKey('shiftLeft', false);
+
+      await tickDelay(NAVIGATION_TICK_INTERVAL);
+    }
+  }
+
+
+  /**
    * Starts navigating the agent towards the target X, Z coordinates.
    */
   public async goto(x: number, z: number): Promise<void> {
