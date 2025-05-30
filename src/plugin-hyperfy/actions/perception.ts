@@ -218,7 +218,7 @@ export const hyperfyScenePerceptionAction: Action = {
           const ent = world.entities.items.get(parameter);
           const pos = ent?.base?.position || ent?.root?.position;
           if (!pos) throw new Error('No position');
-          await world.controls.goto(pos.x, pos.z);
+          await world.controls.followEntity(parameter);
           imgBase64 = await puppeteerManager.snapshotViewToTarget([pos.x, pos.y, pos.z]);
           break;
         default:
