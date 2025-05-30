@@ -16,7 +16,7 @@ export class BehaviorManager {
   }
 
   /**
-   * Starts the behavior loop
+   * Starts the behavior loop if not already running and prerequisites are met.
    */
   public start(): void {
     if (this.isRunning) {
@@ -25,10 +25,13 @@ export class BehaviorManager {
     }
 
     this.isRunning = true;
-    logger.info("[BehaviorManager] Starting behavior loop");
+    logger.info(`[BehaviorManager] Starting behavior loop for player`);
 
-    this.runLoop();
+    this.runLoop().catch((err) =>
+      logger.error("[BehaviorManager] Fatal error in run loop:", err)
+    );
   }
+
 
   /**
    * Stops the behavior loop
@@ -68,6 +71,23 @@ export class BehaviorManager {
    * Executes a behavior
    */
   private async executeBehavior(): Promise<void> {
+    const service = this.getService();
+    if (!service) {
+      logger.error("[BehaviorManager] Cannot start — service not available");
+      return;
+    }
+
+    const world = service.getWorld();
+    if (!world) {
+      logger.error("[BehaviorManager] Cannot start — world not found");
+      return;
+    }
+
+    const player = world.entities?.player;
+    if (!player) {
+      logger.error("[BehaviorManager] Cannot start — player entity not found");
+      return;
+    }
     // TODO: There may be slow post-processing in the bootstrap plugin's message handler.
     // Investigate long tail after message handling, especially in emitEvent or runtime methods.
     if (agentActivityLock.isActive()) {
@@ -75,8 +95,6 @@ export class BehaviorManager {
       return;
     }
 
-    const service = this.getService();
-    const world = service.getWorld();
     const _currentWorldId = service.currentWorldId;
     
     const elizaRoomId = createUniqueUuid(this.runtime, _currentWorldId || 'hyperfy-unknown-world')

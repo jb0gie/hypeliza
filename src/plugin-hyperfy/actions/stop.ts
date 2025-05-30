@@ -38,8 +38,8 @@ export const hyperfyStopMovingAction: Action = {
       }
 
       // Check for required method
-      if (typeof controls.stopNavigation !== 'function') {
-           logger.error('AgentControls missing stopNavigation method.');
+      if (typeof controls.stopAllActions !== 'function') {
+           logger.error('AgentControls missing stopAllActions method.');
            await callback({ text: "Error: Stop functionality not available in controls." });
            return;
       }
@@ -48,7 +48,7 @@ export const hyperfyStopMovingAction: Action = {
 
       try {
         // Call the stop navigation method
-        controls.stopNavigation(reason);
+        controls.stopAllActions(reason);
 
         await callback({
            text: `Stopped navigation. Reason: ${reason}`,

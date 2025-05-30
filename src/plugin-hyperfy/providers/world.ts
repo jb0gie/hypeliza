@@ -44,12 +44,17 @@ export const hyperfyProvider: Provider = {
           const name = entity?.data?.name || entity?.blueprint?.name || 'Unnamed';
           const type = entity?.data?.type || 'unknown';
           const pos = entity?.base?.position || entity?.root?.position;
+          const quat = entity?.base?.quaternion || entity?.root?.quaternion;
           const posStr = pos && (pos instanceof THREE.Vector3 || pos instanceof Vector3Enhanced)
             ? `[${[pos.x, pos.y, pos.z].map(p => p.toFixed(2)).join(', ')}]`
             : 'N/A';
 
           if (id === agentId) {
-            agentText = `## Agent Info (You)\nEntity ID: ${id}, Name: ${name}, Position: ${posStr}`;
+            const quatStr = quat && (quat instanceof THREE.Quaternion)
+              ? `[${[quat.x, quat.y, quat.z, quat.w].map(q => q.toFixed(4)).join(', ')}]`
+              : 'N/A';
+            
+            agentText = `## Agent Info (You)\nEntity ID: ${id}, Name: ${name}, Position: ${posStr}, Quaternion: ${quatStr}`;
             continue;
           }
 
@@ -102,7 +107,26 @@ export const hyperfyProvider: Provider = {
 
 
         const chatHistory = await messageManager.getRecentMessages(elizaRoomId);
-        const chatText = `## In-World Messages\n${chatHistory}`;
+        let chatText = `## In-World Messages\n### Chat History\n${chatHistory}`;
+
+        const messageText = _message.content?.text?.trim();
+        if (messageText) {
+          const senderId = _message.entityId;
+          const senderEntity = await runtime.getEntityById(senderId);
+          const senderName =
+            senderEntity?.metadata?.username ||
+            senderEntity?.names?.[0] ||
+            'Unknown User';
+
+          const receivedMessageSection = [
+            `### Received Message`,
+            `${senderName}: ${messageText}`,
+            `\n### Focus your response`,
+            `You are replying to the above message from **${senderName}**. Keep your answer relevant to that message. Do not repeat earlier replies unless the sender asks again.`
+          ].join('\n');
+
+          chatText += `\n\n${receivedMessageSection}`;
+        }
 
         const animationListText = EMOTES_LIST.map(
           (e) => `- **${e.name}**: ${e.description}`

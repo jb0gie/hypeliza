@@ -1,4 +1,5 @@
 import { Readable } from 'node:stream';
+import { promises as fsPromises } from 'fs';
 
 export async function hashFileBuffer(buffer: Buffer): Promise<string> {
     const hashBuf = await crypto.subtle.digest('SHA-256', buffer)
@@ -47,4 +48,33 @@ export async function convertToAudioBuffer(speechResponse: any): Promise<Buffer>
   }
 
   throw new Error('Unexpected response type from TEXT_TO_SPEECH model');
+}
+
+export const resolveUrl = async (url, world) => {
+  if (typeof url !== "string") {
+    console.error(`Invalid URL type provided: ${typeof url}`);
+    return null;
+  }
+  if (url.startsWith("asset://")) {
+    if (!world.assetsUrl) {
+      console.error(
+        "Cannot resolve asset:// URL, world.assetsUrl not set."
+      );
+      return null;
+    }
+    const filename = url.substring("asset://".length);
+    const baseUrl = world.assetsUrl.replace(/[/\\\\]$/, ""); // Remove trailing slash (either / or \)
+    return `${baseUrl}/${filename}`;
+  }
+  if (url.startsWith("http://") || url.startsWith("https://")) {
+    return url;
+  }
+  console.warn(
+    `[AgentLoader] Cannot resolve potentially relative URL without base: ${url}`
+  );
+  
+  const fileBuffer = await fsPromises.readFile(url);
+  const base64 = fileBuffer.toString('base64');
+  url = `data:image/vnd.radiance;base64,${base64}`;
+  return url;
 }

@@ -14,6 +14,7 @@ import { hyperfyUnuseItemAction } from './actions/unuse';
 import { hyperfyStopMovingAction } from './actions/stop';
 import { hyperfyWalkRandomlyAction } from './actions/walk_randomly';
 import { hyperfyAmbientSpeechAction } from './actions/ambient';
+import { hyperfyScenePerceptionAction } from './actions/perception';
 import { hyperfyProvider } from './providers/world';
 // import { hyperfyEmoteProvider } from './providers/emote';
 
@@ -59,13 +60,13 @@ export const hyperfyPlugin: Plugin = {
       HyperfyService // Register the Hyperfy service
   ],
   actions: [
-      // hyperfyChatAction,
+      hyperfyScenePerceptionAction,
       hyperfyGotoEntityAction,
       hyperfyUseItemAction,
       hyperfyUnuseItemAction,
       hyperfyStopMovingAction,
       hyperfyWalkRandomlyAction,
-      hyperfyAmbientSpeechAction
+      hyperfyAmbientSpeechAction,
   ],
   providers: [
       hyperfyProvider, // Register the Hyperfy provider

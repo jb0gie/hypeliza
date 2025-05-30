@@ -225,10 +225,17 @@ const messageReceivedHandler = async ({
 
             // Map parsed XML to Content type, handling potential missing fields
             if (parsedXml) {
+              let actions = parsedXml.actions || ['IGNORE'];
+
+              // Reorder actions so 'REPLY' always comes first if present
+              const replyIndex = actions.findIndex(a => a.toUpperCase() === 'REPLY');
+              if (replyIndex !== -1) {
+                actions = ['REPLY', ...actions.filter((a, i) => i !== replyIndex)];
+              }
               responseContent = {
                 ...parsedXml,
                 thought: parsedXml.thought || '',
-                actions: parsedXml.actions || ['IGNORE'],
+                actions,
                 providers: parsedXml.providers || [],
                 text: parsedXml.text || '',
                 simple: parsedXml.simple || false,
@@ -625,9 +632,6 @@ export const bootstrapPlugin: Plugin = {
   actions: [
     actions.replyAction,
     actions.ignoreAction,
-    actions.noneAction,
-    actions.sendMessageAction,
-    // actions.interactAction,
   ],
   events,
   providers: [
