@@ -15,15 +15,25 @@ import { AgentControls } from '../systems/controls'; // Import AgentControls typ
 // Import THREE types if needed, e.g., for metadata typing
 // import type * as THREE from 'three';
 
-// Define a simple template for entity extraction
-export const entityExtractionTemplate = (thoughts?: string) => {
+export enum NavigationType {
+  ENTITY = 'entity',
+  POSITION = 'position',
+}
+
+const navigationTargetExtractionTemplate = (thoughts?: string) => {
   return `
 # Task:
-Identify the correct Hyperfy **Entity ID** to navigate to, based on recent conversations, the agent's thoughts, and the current Hyperfy World State.
+Decide whether the agent should navigate to a specific **Entity** or a direct **Position** in the Hyperfy world.
+
+# Navigation Types:
+- "entity": Navigate to a known entity by its ID.
+- "position": Navigate to a specific X,Z coordinate (e.g., from user input like "go to the fountain at 5, 10").
 
 # Constraints:
-- Only use **Hyperfy Entity IDs** listed in the provided world state.
-- Do **not** use person IDs, names, or guesses.
+- Only use **Entity IDs** listed in the current world state.
+- Positions must be 2D coordinates in the format { "x": <number>, "z": <number> }.
+- Never invent or assume entities that are not in the world state.
+- Use "position" only if a direct coordinate is clearly specified or derivable.
 
 # Agent Thought:
 ${thoughts || 'None'}
@@ -32,25 +42,36 @@ ${thoughts || 'None'}
 {{hyperfyStatus}}
 
 # Instructions:
-You are **{{agentName}}**, a virtual agent in a Hyperfy world. Based on your thought process and the recent messages, determine which entity the agent should navigate to.
+You are **{{agentName}}**, a virtual agent in a Hyperfy world. Analyze the conversation and determine the most appropriate navigation type and target.
 
-Return your answer as a JSON object using the following format:
+Return your answer as a JSON object in **one** of the following forms:
 
 \`\`\`json
 {
-  "entityId": "<string>" // The ID of the target entity, or null if no target is clearly identifiable
+  "navigationType": "${NavigationType.ENTITY}",
+  "parameter": { "entityId": "<string>" }
 }
 \`\`\`
 
-Only return the JSON object. Do not include any other text.
+or
+
+\`\`\`json
+{
+  "navigationType": "${NavigationType.POSITION}",
+  "parameter": { "position": { "x": 5, "z": 10 } }
+}
+\`\`\`
+
+Only return the JSON object. Do not include any extra text or comments.
   `.trim();
 };
+
 
 
 export const hyperfyGotoEntityAction: Action = {
     name: 'HYPERFY_GOTO_ENTITY',
     similes: ['GO_TO_ENTITY_IN_WORLD', 'MOVE_TO_ENTITY', 'NAVIGATE_TO_ENTITY'],
-    description: 'Navigates the agent to the specified entity ID within the connected Hyperfy world using the AgentControls system.',
+    description: 'Navigates the agent to the specified entity ID or position within the connected Hyperfy world using the AgentControls system.',
     validate: async (runtime: IAgentRuntime): Promise<boolean> => {
       const service = runtime.getService<HyperfyService>(HyperfyService.serviceType);
       // Check if connected and if controls are available
@@ -80,75 +101,85 @@ export const hyperfyGotoEntityAction: Action = {
         return;
       }
       
-      let targetEntityId: string | undefined = options?.entityId;
-
-      // If entityId wasn't provided in options, try to extract it from the message
-      if (!targetEntityId) {
-          logger.info('[GOTO Action] No entityId in options, attempting extraction from message...');
-          try {
-              // Compose state including entities provider
-              const extractionState = await runtime.composeState(message);
-
-              const prompt = composePromptFromState({
-                  state: extractionState,
-                  template: entityExtractionTemplate(thoughtSnippets),
-              });
-
-              // Use OBJECT_SMALL model for structured response
-              const response = await runtime.useModel(ModelType.OBJECT_LARGE, { prompt });
-
-              if (response && response.entityId && typeof response.entityId === 'string') {
-                  targetEntityId = response.entityId;
-                   logger.info(`[GOTO Action] Extracted entityId: ${targetEntityId}`);
-              } else {
-                   logger.warn('[GOTO Action] Could not extract entityId from message via LLM.', response);
-              }
-
-          } catch (error) {
-              logger.error(`[GOTO Action] Error during entityId extraction: ${error}`);
-              // Proceed without targetEntityId, error handled below
-          }
-      }
-
-      // Final check if we have a target entity ID
-      if (!targetEntityId) {
-          logger.error('[GOTO Action] No target entity ID specified either in options or extracted from message.');
-          await callback({ thought: 'Action failed: No target entity ID.', text: "Action failed: No target entity ID specified.", metadata: { error: 'missing_entity_id' } });
-          return;
-      }
+      let navigationResult: any = null;
 
       try {
-        const entity = world.entities.items.get(targetEntityId)
-        const targetPosition = entity?.base?.position || entity?.root?.position;;
-
-        if (!targetPosition) {
-            const targetName = service.getEntityName(targetEntityId);
-            const errorMsg = `Error: Cannot navigate. Could not find location for entity ${targetName || targetEntityId}.`;
-            logger.error(`HYPERFY_GOTO_ENTITY: ${errorMsg}`);
-            await callback({ text: errorMsg, metadata: { error: 'entity_not_found', targetEntityId: targetEntityId } });
-            return;
-        }
-
-        // Tell the controls system to start navigating to the single target
-        const targetName = service.getEntityName(targetEntityId);
-        logger.info(`HYPERFY_GOTO_ENTITY: Requesting navigation via controls to entity ${targetName || targetEntityId} at (${targetPosition.x.toFixed(2)}, ${targetPosition.z.toFixed(2)})`);
-        controls.goto(targetPosition.x, targetPosition.z); // Use controls method
-
-        // // Provide initial confirmation
-        await callback({
-           text: ``,
-           actions: ['HYPERFY_GOTO_ENTITY'],
-           source: 'hyperfy',
-           metadata: {
-               targetEntityId: targetEntityId,
-               targetPosition: targetPosition.toArray(),
-               status: 'navigation_started'
-           }
+        const extractionState = await runtime.composeState(message);
+        const prompt = composePromptFromState({
+          state: extractionState,
+          template: navigationTargetExtractionTemplate(thoughtSnippets),
         });
 
+        navigationResult = await runtime.useModel(ModelType.OBJECT_LARGE, { prompt });
+        logger.info('[GOTO Action] Navigation target extracted:', navigationResult);
+      } catch (error) {
+        logger.error(`[GOTO Action] Error during navigation target extraction:`, error);
+        await callback({
+          thought: 'Failed to extract navigation target.',
+          text: 'Action failed: Could not determine a navigation target.',
+          metadata: { error: 'extraction_failed' },
+        });
+        return;
+      }
+
+      if (
+        !navigationResult ||
+        !navigationResult.navigationType ||
+        !navigationResult.parameter
+      ) {
+        await callback({
+          thought: 'Navigation target missing or malformed.',
+          text: 'Action failed: Invalid navigation target.',
+          metadata: { error: 'invalid_navigation_target' },
+        });
+        return;
+      }
+
+      const { navigationType, parameter } = navigationResult;
+
+      try {
+        switch (navigationType) {
+          case NavigationType.ENTITY: {
+            const entityId = parameter?.entityId;
+            if (!entityId) throw new Error('Missing entityId in parameter.');
+
+            logger.info(`Navigating to entity ${entityId}`);
+            await controls.followEntity(entityId);
+
+            await callback({
+              text: '',
+              actions: ['HYPERFY_GOTO_ENTITY'],
+              source: 'hyperfy',
+            });
+            break;
+          }
+
+          case NavigationType.POSITION: {
+            const pos = parameter?.position;
+            if (!pos || typeof pos.x !== 'number' || typeof pos.z !== 'number') {
+              throw new Error('Invalid position coordinates.');
+            }
+
+            logger.info(`Navigating to position (${pos.x}, ${pos.z})`);
+            await controls.goto(pos.x, pos.z);
+
+            await callback({
+              text: '',
+              actions: ['HYPERFY_GOTO_ENTITY'],
+              source: 'hyperfy',
+            });
+            break;
+          }
+
+          default:
+            throw new Error(`Unsupported navigation type: ${navigationType}`);
+        }
       } catch (error: any) {
-        logger.error(`Error during HYPERFY_GOTO_ENTITY for ID ${targetEntityId}:`, error);
-        await callback({ text: `Error starting navigation: ${error.message}`, metadata: { error: 'navigation_start_failed' } });
+        logger.error(`[GOTO Action] Navigation failed:`, error);
+        await callback({
+          text: `Navigation failed: ${error.message}`,
+          metadata: { error: 'navigation_error', detail: error.message },
+        });
       }
     },
      examples: [
@@ -165,6 +196,18 @@ export const hyperfyGotoEntityAction: Action = {
       [
         { name: '{{name1}}', content: { text: 'Go to the missing chair' } }, // User might specify ID in options
         { name: '{{name2}}', content: { text: 'Error: Cannot navigate. Could not find location for entity chair999.' } } // Assuming ID was chair999
+      ],
+      [
+        { name: '{{name1}}', content: { text: 'Go to the fountain at 12, 8' } },
+        { name: '{{name2}}', content: { text: 'Navigating to position (12, 8)...', actions: ['HYPERFY_GOTO_ENTITY'], source: 'hyperfy' } }
+      ],
+      [
+        { name: '{{name1}}', content: { text: 'Walk to coordinate x: 5 z: -3' } },
+        { name: '{{name2}}', content: { text: 'Navigating to position (5, -3)...', actions: ['HYPERFY_GOTO_ENTITY'], source: 'hyperfy' } }
+      ],
+      [
+        { name: '{{name1}}', content: { text: 'Move to 0, 0 in the world' } },
+        { name: '{{name2}}', content: { text: 'Navigating to position (0, 0)...', actions: ['HYPERFY_GOTO_ENTITY'], source: 'hyperfy' } }
       ]
      ]
   }; 
