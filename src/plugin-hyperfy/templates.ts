@@ -130,8 +130,8 @@ Respond using this format:
 </output>
 
 <rules>
+- **Action order matters.** The character will execute actions **in the exact order listed**. Always begin with **REPLY** if the agent is speaking.
 - ONLY use the exact actions listed under **Available Actions**.
-- Always begin with **REPLY** if you are saying something.
 - NEVER invent new actions or behaviors.
 - The **emote** is a visible in-game animation. Use it to express tone (joy, frustration, sarcasm, etc.) or to enhance immersion.
 - Use ONLY the provided Hyperfy World State to decide what exists now. Forget earlier messages.
