@@ -632,9 +632,6 @@ export const bootstrapPlugin: Plugin = {
   actions: [
     actions.replyAction,
     actions.ignoreAction,
-    actions.noneAction,
-    actions.sendMessageAction,
-    // actions.interactAction,
   ],
   events,
   providers: [
