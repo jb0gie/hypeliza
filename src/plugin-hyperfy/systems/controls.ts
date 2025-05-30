@@ -10,7 +10,8 @@ const q1 = new THREE.Quaternion()
 
 // Define Navigation Constants
 const NAVIGATION_TICK_INTERVAL = 100; // ms
-const NAVIGATION_STOP_DISTANCE = 1.0; // meters
+const NAVIGATION_STOP_DISTANCE = 0.5; // meters
+const FOLLOW_STOP_DISTANCE = 2.5; // meters
 const RANDOM_WALK_DEFAULT_INTERVAL = 5000; // ms <-- SET TO 5 SECONDS
 const RANDOM_WALK_DEFAULT_MAX_DISTANCE = 7; // meters
 
@@ -195,7 +196,7 @@ export class AgentControls extends System {
   /**
    * Navigates toward an entity (by ID) until within stop distance.
    */
-  public async followEntity(entityId: string, stopDistance: number = NAVIGATION_STOP_DISTANCE): Promise<void> {
+  public async followEntity(entityId: string, stopDistance: number = FOLLOW_STOP_DISTANCE): Promise<void> {
     this.stopRandomWalk();
     this.stopNavigation("starting followEntity");
 
