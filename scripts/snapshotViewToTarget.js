@@ -30,5 +30,5 @@ window.snapshotViewToTarget = async function(playerData, targetPosition) {
   // Render
   renderer.render(win.scene, camera);
 
-  return renderer.domElement.toDataURL('image/png').split(',')[1];
+  return renderer.domElement.toDataURL('image/jpeg').split(',')[1];
 };

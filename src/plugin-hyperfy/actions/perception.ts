@@ -230,13 +230,11 @@ export const hyperfyScenePerceptionAction: Action = {
       return;
     }
 
-    const dataUrl = `data:image/png;base64,${imgBase64}`;
-
     /* IMAGE_DESCRIPTION – detailed scene analysis */
     const imgDescPrompt = composePromptFromState({ state, template: detailedImageDescriptionTemplate });
     let sceneDescription: string;
     try {
-      const res = await runtime.useModel(ModelType.IMAGE_DESCRIPTION, { imageUrl: dataUrl, prompt: imgDescPrompt });
+      const res = await runtime.useModel(ModelType.IMAGE_DESCRIPTION, { imageUrl: imgBase64, prompt: imgDescPrompt });
       sceneDescription = typeof res === 'string' ? res : res.description;
     } catch (err) {
       logger.error('IMAGE_DESCRIPTION failed:', err);

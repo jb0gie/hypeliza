@@ -80,6 +80,6 @@ window.snapshotEquirectangular = async function(playerData) {
     imageData.data.set(pixels);
     ctx.putImageData(imageData, 0, 0);
   
-    return canvas.toDataURL('image/png').split(',')[1];
+    return canvas.toDataURL('image/jpeg').split(',')[1];
 };
   

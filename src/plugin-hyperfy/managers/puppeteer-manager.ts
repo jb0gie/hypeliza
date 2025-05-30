@@ -128,10 +128,10 @@ export class PuppeteerManager {
       return await window.snapshotFacingDirection(playerData);
     }, playerData);
   
-    const filePath = path.resolve(`scene_facing_${direction}.png`);
+    const filePath = path.resolve(`scene_facing_${direction}.jpeg`);
     fs.writeFileSync(filePath, Buffer.from(base64, 'base64'));
   
-    return base64;
+    return `data:image/jpeg;base64,${base64}`;
   }
   
   public async snapshotViewToTarget(targetPosition: [number, number, number]): Promise<string> {
@@ -155,10 +155,10 @@ export class PuppeteerManager {
       return await window.snapshotViewToTarget(playerData, targetPosition);
     }, playerData, targetPosition);
   
-    const filePath = path.resolve(`scene_view_to_target.png`);
+    const filePath = path.resolve(`scene_view_to_target.jpeg`);
     fs.writeFileSync(filePath, Buffer.from(base64, 'base64'));
   
-    return base64;
+    return `data:image/jpeg;base64,${base64}`;
   }
   
 
@@ -185,10 +185,10 @@ export class PuppeteerManager {
     }, playerData);
   
     const buffer = Buffer.from(base64, 'base64');
-    const filePath = path.resolve('scene_equirectangular.png');
+    const filePath = path.resolve('scene_equirectangular.jpeg');
     fs.writeFileSync(filePath, buffer);
   
-    return base64;
+    return `data:image/jpeg;base64,${base64}`;
   }
   
   
