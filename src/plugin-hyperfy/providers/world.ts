@@ -44,21 +44,30 @@ export const hyperfyProvider: Provider = {
           const type = entity?.data?.type || 'unknown';
           const pos = entity?.base?.position || entity?.root?.position;
           const quat = entity?.base?.quaternion || entity?.root?.quaternion;
+          const scale = entity?.base?.scale || entity?.root?.scale;
           const posStr = pos && (pos instanceof THREE.Vector3 || pos instanceof Vector3Enhanced)
             ? `[${[pos.x, pos.y, pos.z].map(p => p.toFixed(2)).join(', ')}]`
             : 'N/A';
+          
+          const quatStr = quat && (quat instanceof THREE.Quaternion)
+            ? `[${[quat.x, quat.y, quat.z, quat.w].map(q => q.toFixed(4)).join(', ')}]`
+            : 'N/A';
+      
+          const scaleStr = scale && (scale instanceof THREE.Vector3 || scale instanceof Vector3Enhanced)
+            ? `[${[scale.x, scale.y, scale.z].map(s => s.toFixed(2)).join(', ')}]`
+            : 'N/A';
 
           if (id === agentId) {
-            const quatStr = quat && (quat instanceof THREE.Quaternion)
-              ? `[${[quat.x, quat.y, quat.z, quat.w].map(q => q.toFixed(4)).join(', ')}]`
-              : 'N/A';
-            
             agentText = `## Agent Info (You)\nEntity ID: ${id}, Name: ${name}, Position: ${posStr}, Quaternion: ${quatStr}`;
             continue;
           }
 
           allEntityIds.push(id);
-          const line = `- Name: ${name}, Entity ID: ${id}, Position: ${posStr}`;
+          let line = `- Name: ${name}, Entity ID: ${id}, Position: ${posStr}, Quaternion: ${quatStr}`;
+
+          if (type === 'app') {
+            line += `, Scale: ${scaleStr}`;
+          }
 
           if (!categorizedEntities[type]) {
             categorizedEntities[type] = [];
@@ -112,10 +121,23 @@ export const hyperfyProvider: Provider = {
         if (messageText) {
           const senderId = _message.entityId;
           const senderEntity = await runtime.getEntityById(senderId);
-          const senderName =
-            senderEntity?.metadata?.username ||
-            senderEntity?.names?.[0] ||
-            'Unknown User';
+          const senderName = (() => {
+            try {
+              const parsedData = JSON.parse(senderEntity?.data || '{}');
+              const hyperfyData = parsedData.hyperfy || {};
+              return (
+                hyperfyData.userName ||
+                hyperfyData.name ||
+                (senderEntity?.names || []).find(n => n.toLowerCase() !== 'anonymous') ||
+                'Unknown User'
+              );
+            } catch (e) {
+              return (
+                (senderEntity?.names || []).find(n => n.toLowerCase() !== 'anonymous') ||
+                'Unknown User'
+              );
+            }
+          })();
 
           const receivedMessageSection = [
             `### Received Message`,
