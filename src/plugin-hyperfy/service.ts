@@ -24,8 +24,6 @@ import { VoiceManager } from './managers//voice-manager.js'
 import { PuppeteerManager } from './managers/puppeteer-manager.js'
 import { BuildManager } from './managers/build-manager.js'
 import { hashFileBuffer } from './utils'
-import { uuid } from './hyperfy/src/core/utils.js'
-import { cloneDeep } from 'lodash-es'
 
 const LOCAL_AVATAR_PATH = process.env.HYPERFY_AGENT_AVATAR_PATH || './avatars/avatar.vrm'
 
@@ -200,7 +198,7 @@ export class HyperfyService extends Service {
 
       this.voiceManager.start();
 
-      // this.behaviorManager.start();
+      this.behaviorManager.start();
 
       this.subscribeToHyperfyEvents()
 
@@ -405,57 +403,17 @@ export class HyperfyService extends Service {
         console.log('networkReady', networkReady)
         if (agentPlayerReady && agentPlayerIdReady && networkReady) {
             const entityId = createUniqueUuid(this.runtime, this.runtime.agentId);
-            const entity2 = await this.runtime.getEntityById(entityId)
-            if (entity2) {
-              entity2.metadata.hyperfy = {
+            const entity = await this.runtime.getEntityById(entityId)
+            if (entity) {
+              entity.metadata.hyperfy = {
                 id: agentPlayerId,
                 name: agentPlayer?.data?.name,
                 userName:agentPlayer?.data?.name
               }
               
-              await this.runtime.updateEntity(entity2)
+              await this.runtime.updateEntity(entity)
             }
 
-            // const entity = this.world.entities.items.get("f3dh7vfnNA");
-            // if (entity?.isApp) {
-            //   let blueprintId = entity.data.blueprint
-            //   // if unique, we also duplicate the blueprint
-            //   if (entity.blueprint.unique) {
-            //     const blueprint = {
-            //       id: uuid(),
-            //       version: 0,
-            //       name: entity.blueprint.name,
-            //       image: entity.blueprint.image,
-            //       author: entity.blueprint.author,
-            //       url: entity.blueprint.url,
-            //       desc: entity.blueprint.desc,
-            //       model: entity.blueprint.model,
-            //       script: entity.blueprint.script,
-            //       props: cloneDeep(entity.blueprint.props),
-            //       preload: entity.blueprint.preload,
-            //       public: entity.blueprint.public,
-            //       locked: entity.blueprint.locked,
-            //       frozen: entity.blueprint.frozen,
-            //       unique: entity.blueprint.unique,
-            //       disabled: entity.blueprint.disabled,
-            //     }
-            //     this.world.blueprints.add(blueprint, true)
-            //     blueprintId = blueprint.id
-            //   }
-            //   const data = {
-            //     id: uuid(),
-            //     type: 'app',
-            //     blueprint: blueprintId,
-            //     position: entity.root.position.toArray(),
-            //     quaternion: entity.root.quaternion.toArray(),
-            //     scale: entity.root.scale.toArray(),
-            //     mover: this.world.network.id,
-            //     uploader: null,
-            //     pinned: false,
-            //     state: {},
-            //   }
-            //   const dup = this.world.entities.add(data, true)
-            // }
              // --- Set Name (if not already done) ---
              if (!pollingTasks.name) {
                  console.info(`[Name Polling] Player (ID: ${agentPlayerId}), network ready. Attempting name...`);
