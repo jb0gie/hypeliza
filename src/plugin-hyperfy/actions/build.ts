@@ -197,7 +197,7 @@ ${summary}
         attempts++;
       }
 
-      console.log("##############################", operationResults);
+      console.info(`[EDIT_ENTITY Action] operationResults: ${operationResults}`);
     
       if (!Array.isArray(operationResults?.operations)) {
         logger.error(`[EDIT_ENTITY Action] Scene editing failed — could not understand instructions properly.`);
