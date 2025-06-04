@@ -11,7 +11,6 @@ import {
 import { HyperfyService } from '../service';
 import * as THREE from 'three'
 import { Vector3Enhanced } from '../hyperfy/src/core/extras/Vector3Enhanced.js'
-import { EMOTES_LIST } from '../constants.js';
 
 export const hyperfyProvider: Provider = {
     name: 'HYPERFY_WORLD_STATE',
@@ -128,13 +127,8 @@ export const hyperfyProvider: Provider = {
           chatText += `\n\n${receivedMessageSection}`;
         }
 
-        const animationListText = EMOTES_LIST.map(
-          (e) => `- **${e.name}**: ${e.description}`
-        ).join('\n');
-        const animationText = `## Available Animations\n${animationListText}`;
-        
         const formattedText =
-          `# Hyperfy World State\n\n${agentText}${categorizedSummary}\n\n${actionText}\n\n${equipText}\n\n${chatText}\n\n${animationText}`;
+          `# Hyperfy World State\n\n${agentText}${categorizedSummary}\n\n${actionText}\n\n${equipText}\n\n${chatText}\n\n`;
 
         return {
           text: formattedText,

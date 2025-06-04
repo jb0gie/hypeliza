@@ -79,10 +79,7 @@ export const hyperfyUseItemAction: Action = {
     }
 
     if (!targetEntityId) {
-      await callback({
-        text: "No suitable item found to use based on the context.",
-        metadata: { error: 'missing_entity_id' }
-      });
+      logger.warn('[USE ITEM] No suitable item found to use based on the context.');
       return;
     }
 

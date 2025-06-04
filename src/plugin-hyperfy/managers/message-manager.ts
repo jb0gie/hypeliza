@@ -186,6 +186,7 @@ export class MessageManager {
     messages: Memory[];
     entities: Entity[];
   }) {
+    
     const messageStrings = messages
       .filter((message: Memory) => message.entityId)
       .reverse()
@@ -195,7 +196,24 @@ export class MessageManager {
         const messageActions = content.actions;
   
         const entity = entities.find((e: Entity) => e.id === message.entityId) as any;
-        const formattedName = entity?.names[0] || "Unknown User";
+        const formattedName = (() => {
+          try {
+            const parsedData = JSON.parse(entity?.data || '{}');
+            const hyperfyData = parsedData.hyperfy || {};
+            return (
+              hyperfyData.userName ||
+              hyperfyData.name ||
+              (entity?.names || []).find(n => n.toLowerCase() !== 'anonymous') ||
+              'Unknown User'
+            );
+          } catch (e) {
+            return (
+              (entity?.names || []).find(n => n.toLowerCase() !== 'anonymous') ||
+              'Unknown User'
+            );
+          }
+        })();
+
         const formattedId = entity ? JSON.parse(entity.data).hyperfy.id : "";
   
         const messageTime = new Date(message.createdAt);
