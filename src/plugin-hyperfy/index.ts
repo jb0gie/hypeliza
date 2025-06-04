@@ -15,6 +15,7 @@ import { hyperfyStopMovingAction } from './actions/stop';
 import { hyperfyWalkRandomlyAction } from './actions/walk_randomly';
 import { hyperfyAmbientSpeechAction } from './actions/ambient';
 import { hyperfyScenePerceptionAction } from './actions/perception';
+import { hyperfyEditEntityAction } from './actions/build';
 import { hyperfyProvider } from './providers/world';
 // import { hyperfyEmoteProvider } from './providers/emote';
 
@@ -67,6 +68,7 @@ export const hyperfyPlugin: Plugin = {
       hyperfyStopMovingAction,
       hyperfyWalkRandomlyAction,
       hyperfyAmbientSpeechAction,
+      hyperfyEditEntityAction,
   ],
   providers: [
       hyperfyProvider, // Register the Hyperfy provider
