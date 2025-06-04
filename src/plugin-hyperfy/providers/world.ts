@@ -121,23 +121,11 @@ export const hyperfyProvider: Provider = {
         if (messageText) {
           const senderId = _message.entityId;
           const senderEntity = await runtime.getEntityById(senderId);
-          const senderName = (() => {
-            try {
-              const parsedData = JSON.parse(senderEntity?.data || '{}');
-              const hyperfyData = parsedData.hyperfy || {};
-              return (
-                hyperfyData.userName ||
-                hyperfyData.name ||
-                (senderEntity?.names || []).find(n => n.toLowerCase() !== 'anonymous') ||
-                'Unknown User'
-              );
-            } catch (e) {
-              return (
-                (senderEntity?.names || []).find(n => n.toLowerCase() !== 'anonymous') ||
-                'Unknown User'
-              );
-            }
-          })();
+          const senderName =
+            senderEntity?.metadata?.hyperfy.username ||
+            senderEntity?.metadata?.hyperfy.name ||
+            (senderEntity?.names || []).find(n => n.toLowerCase() !== 'anonymous') ||
+            'Unknown User';
 
           const receivedMessageSection = [
             `### Received Message`,
