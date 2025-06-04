@@ -233,7 +233,7 @@ const messageReceivedHandler = async ({
                 actions = ['REPLY', ...actions.filter((a, i) => i !== replyIndex)];
               }
 
-              // Deduplicate actions (case-insensitive)
+              // Deduplicate actions
               actions = Array.from(new Set(actions.map(a => a.toUpperCase())));
 
               responseContent = {
