@@ -232,6 +232,10 @@ const messageReceivedHandler = async ({
               if (replyIndex !== -1) {
                 actions = ['REPLY', ...actions.filter((a, i) => i !== replyIndex)];
               }
+
+              // Deduplicate actions (case-insensitive)
+              actions = Array.from(new Set(actions.map(a => a.toUpperCase())));
+
               responseContent = {
                 ...parsedXml,
                 thought: parsedXml.thought || '',
