@@ -210,8 +210,8 @@ ${summary}
           continue;
         }
     
-        const { operation, targetEntityId, parameters } = op;
-    
+        const { operation, targetEntityId, parameters, description } = op;
+        
         switch (operation) {
           case EditOperationType.TRANSLATE:
             await buildManager.translate(targetEntityId, parameters?.translate);
@@ -237,6 +237,18 @@ ${summary}
             logger.warn(`[EDIT_ENTITY Action] Unsupported operation type: ${operation}`);
             break;
         }
+        if (description) {
+            const agentPlayerId = world.entities.player.data.id
+            const agentPlayerName = service.getEntityName(agentPlayerId) || world.entities.player.data?.name || 'Hyperliza'      
+            world.chat.add(
+                {
+                    body: description,
+                    fromId: agentPlayerId,
+                    from: agentPlayerName,
+                },
+                true
+            )
+        }
       }
       const summaryText = operationResults.operations.map(op => {
         if (op?.success) {
@@ -254,7 +266,7 @@ ${summary}
       
       let finalXml: string;
       try {
-        finalXml = await runtime.useModel(ModelType.TEXT_LARGE, { prompt: agentResponsePrompt });
+        finalXml = await runtime.useModel(ModelType.TEXT_SMALL, { prompt: agentResponsePrompt });
       } catch (err) {
         logger.error('[EDIT_ENTITY Action] Final summarization failed:', err);
         await callback({
