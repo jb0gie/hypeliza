@@ -251,12 +251,32 @@ export class MessageManager {
         unique: false,
       }),
     ]);
-    const formattedRecentMessages = this.formatMessages({
+    const formattedHistory = this.formatMessages({
       messages: recentMessagesData,
       entities: entitiesData,
     });
 
-    return formattedRecentMessages;
+    const lastResponseText = recentMessagesData
+      .filter(msg =>
+        msg.entityId === this.runtime.agentId &&
+        typeof msg.content?.text === 'string' &&
+        msg.content.text.trim() !== ''
+      )
+      .sort((a, b) => b.createdAt - a.createdAt)[0]?.content.text || null;
+
+    const lastActions = recentMessagesData
+      .filter(msg =>
+        msg.entityId === this.runtime.agentId &&
+        Array.isArray(msg.content?.actions) &&
+        msg.content.actions.length > 0
+      )
+      .sort((a, b) => b.createdAt - a.createdAt)[0]?.content.actions || [];
+
+    return {
+      formattedHistory,
+      lastResponseText,
+      lastActions,
+    };
   }
 
   private getService() {

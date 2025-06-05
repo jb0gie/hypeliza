@@ -146,8 +146,14 @@ export const hyperfyGotoEntityAction: Action = {
             logger.info(`Navigating to entity ${entityId}`);
             await controls.followEntity(entityId);
 
+            const targetEntity = world.entities.items.get(parameter.entityId);
+            const entityName =
+              targetEntity?.data?.name ||
+              targetEntity?.blueprint?.name ||
+              `entity ${entityId}`;
+
             await callback({
-              text: '',
+              text: `Arrived at ${entityName}.`,
               actions: ['HYPERFY_GOTO_ENTITY'],
               source: 'hyperfy',
             });
@@ -164,7 +170,7 @@ export const hyperfyGotoEntityAction: Action = {
             await controls.goto(pos.x, pos.z);
 
             await callback({
-              text: '',
+              text: `Reached position (${pos.x}, ${pos.z}).`,
               actions: ['HYPERFY_GOTO_ENTITY'],
               source: 'hyperfy',
             });

@@ -114,8 +114,13 @@ export const hyperfyProvider: Provider = {
         })() : '## Your Equipped Item or Action\nYou are not currently performing or holding anything.';
 
 
-        const chatHistory = await messageManager.getRecentMessages(elizaRoomId);
-        let chatText = `## In-World Messages\n### Chat History\n${chatHistory}`;
+        const {
+          formattedHistory,
+          lastResponseText,
+          lastActions
+        } = await messageManager.getRecentMessages(elizaRoomId);
+
+        let chatText = `## In-World Messages\n### Chat History\n${formattedHistory}`;
 
         const messageText = _message.content?.text?.trim();
         if (messageText) {
@@ -137,8 +142,11 @@ export const hyperfyProvider: Provider = {
           chatText += `\n\n${receivedMessageSection}`;
         }
 
+        const agentMemoryText = `### Your Last Response\n${lastResponseText ?? 'No recent message.'}\n\n### Your Last Action\n${JSON.stringify(lastActions, null, 2)}`;
+
+
         const formattedText =
-          `# Hyperfy World State\n\n${agentText}${categorizedSummary}\n\n${actionText}\n\n${equipText}\n\n${chatText}\n\n`;
+          `# Hyperfy World State\n\n${agentText}${categorizedSummary}\n\n${actionText}\n\n${equipText}\n\n${chatText}\n\n${agentMemoryText}\n\n`;
 
         return {
           text: formattedText,
