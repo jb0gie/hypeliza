@@ -142,7 +142,9 @@ export const hyperfyProvider: Provider = {
           chatText += `\n\n${receivedMessageSection}`;
         }
 
-        const agentMemoryText = `### Your Last Response\n${lastResponseText ?? 'No recent message.'}\n\n### Your Last Action\n${JSON.stringify(lastActions, null, 2)}`;
+        const agentMemoryText = lastResponseText
+          ? `### Your Last Response\n${lastResponseText}\n\n_Do not repeat this unless someone asks again._\n\n### Your Last Action\n${JSON.stringify(lastActions, null, 2)}`
+          : `### Your Last Response\nNo recent message.\n\n### Your Last Action\n${JSON.stringify(lastActions, null, 2)}`;
 
 
         const formattedText =
