@@ -37,6 +37,8 @@ ${HYPERFY_ACTIONS.map(
 
 {{hyperfyStatus}}
 
+{{hyperfyAnimations}}
+
 </providers>
 
 <keys>
@@ -96,6 +98,7 @@ Your task is to observe, interpret, and respond to the current moment as a fully
 
 {{hyperfyStatus}}
 
+{{hyperfyAnimations}}
 
 </providers>
 

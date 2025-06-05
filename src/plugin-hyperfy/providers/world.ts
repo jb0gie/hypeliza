@@ -11,7 +11,6 @@ import {
 import { HyperfyService } from '../service';
 import * as THREE from 'three'
 import { Vector3Enhanced } from '../hyperfy/src/core/extras/Vector3Enhanced.js'
-import { EMOTES_LIST } from '../constants.js';
 
 export const hyperfyProvider: Provider = {
     name: 'HYPERFY_WORLD_STATE',
@@ -45,21 +44,30 @@ export const hyperfyProvider: Provider = {
           const type = entity?.data?.type || 'unknown';
           const pos = entity?.base?.position || entity?.root?.position;
           const quat = entity?.base?.quaternion || entity?.root?.quaternion;
+          const scale = entity?.base?.scale || entity?.root?.scale;
           const posStr = pos && (pos instanceof THREE.Vector3 || pos instanceof Vector3Enhanced)
             ? `[${[pos.x, pos.y, pos.z].map(p => p.toFixed(2)).join(', ')}]`
             : 'N/A';
+          
+          const quatStr = quat && (quat instanceof THREE.Quaternion)
+            ? `[${[quat.x, quat.y, quat.z, quat.w].map(q => q.toFixed(4)).join(', ')}]`
+            : 'N/A';
+      
+          const scaleStr = scale && (scale instanceof THREE.Vector3 || scale instanceof Vector3Enhanced)
+            ? `[${[scale.x, scale.y, scale.z].map(s => s.toFixed(2)).join(', ')}]`
+            : 'N/A';
 
           if (id === agentId) {
-            const quatStr = quat && (quat instanceof THREE.Quaternion)
-              ? `[${[quat.x, quat.y, quat.z, quat.w].map(q => q.toFixed(4)).join(', ')}]`
-              : 'N/A';
-            
             agentText = `## Agent Info (You)\nEntity ID: ${id}, Name: ${name}, Position: ${posStr}, Quaternion: ${quatStr}`;
             continue;
           }
 
           allEntityIds.push(id);
-          const line = `- Name: ${name}, Entity ID: ${id}, Position: ${posStr}`;
+          let line = `- Name: ${name}, Entity ID: ${id}, Position: ${posStr}, Quaternion: ${quatStr}`;
+
+          if (type === 'app') {
+            line += `, Scale: ${scaleStr}`;
+          }
 
           if (!categorizedEntities[type]) {
             categorizedEntities[type] = [];
@@ -106,16 +114,22 @@ export const hyperfyProvider: Provider = {
         })() : '## Your Equipped Item or Action\nYou are not currently performing or holding anything.';
 
 
-        const chatHistory = await messageManager.getRecentMessages(elizaRoomId);
-        let chatText = `## In-World Messages\n### Chat History\n${chatHistory}`;
+        const {
+          formattedHistory,
+          lastResponseText,
+          lastActions
+        } = await messageManager.getRecentMessages(elizaRoomId);
+
+        let chatText = `## In-World Messages\n### Chat History\n${formattedHistory}`;
 
         const messageText = _message.content?.text?.trim();
         if (messageText) {
           const senderId = _message.entityId;
           const senderEntity = await runtime.getEntityById(senderId);
           const senderName =
-            senderEntity?.metadata?.username ||
-            senderEntity?.names?.[0] ||
+            senderEntity?.metadata?.hyperfy.username ||
+            senderEntity?.metadata?.hyperfy.name ||
+            (senderEntity?.names || []).find(n => n.toLowerCase() !== 'anonymous') ||
             'Unknown User';
 
           const receivedMessageSection = [
@@ -128,13 +142,13 @@ export const hyperfyProvider: Provider = {
           chatText += `\n\n${receivedMessageSection}`;
         }
 
-        const animationListText = EMOTES_LIST.map(
-          (e) => `- **${e.name}**: ${e.description}`
-        ).join('\n');
-        const animationText = `## Available Animations\n${animationListText}`;
-        
+        const agentMemoryText = lastResponseText
+          ? `### Your Last Response\n${lastResponseText}\n\n_Do not repeat this unless someone asks again._\n\n### Your Last Action\n${JSON.stringify(lastActions, null, 2)}`
+          : `### Your Last Response\nNo recent message.\n\n### Your Last Action\n${JSON.stringify(lastActions, null, 2)}`;
+
+
         const formattedText =
-          `# Hyperfy World State\n\n${agentText}${categorizedSummary}\n\n${actionText}\n\n${equipText}\n\n${chatText}\n\n${animationText}`;
+          `# Hyperfy World State\n\n${agentText}${categorizedSummary}\n\n${actionText}\n\n${equipText}\n\n${chatText}\n\n${agentMemoryText}\n\n`;
 
         return {
           text: formattedText,

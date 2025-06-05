@@ -104,6 +104,8 @@ Your task is to observe, interpret, and respond to the current moment as a fully
 
 {{hyperfyStatus}}
 
+{{hyperfyAnimations}}
+
 ## In-World Visual Report (what you currently see)
 This is your live visual understanding of the environment based on a recent in-world snapshot. Treat it as your own sensory input — as if you're looking at the scene right now:
 

@@ -15,8 +15,9 @@ import { hyperfyStopMovingAction } from './actions/stop';
 import { hyperfyWalkRandomlyAction } from './actions/walk_randomly';
 import { hyperfyAmbientSpeechAction } from './actions/ambient';
 import { hyperfyScenePerceptionAction } from './actions/perception';
+import { hyperfyEditEntityAction } from './actions/build';
 import { hyperfyProvider } from './providers/world';
-// import { hyperfyEmoteProvider } from './providers/emote';
+import { hyperfyEmoteProvider } from './providers/emote';
 
 // --- Hardcoded values matching agent/index.mjs ---
 const HYPERFY_WS_URL = process.env.WS_URL || 'wss://chill.hyperfy.xyz/ws'
@@ -67,9 +68,11 @@ export const hyperfyPlugin: Plugin = {
       hyperfyStopMovingAction,
       hyperfyWalkRandomlyAction,
       hyperfyAmbientSpeechAction,
+      hyperfyEditEntityAction,
   ],
   providers: [
       hyperfyProvider, // Register the Hyperfy provider
+      hyperfyEmoteProvider
   ],
 };
 

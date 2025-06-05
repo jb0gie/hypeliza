@@ -195,52 +195,18 @@ export class AgentControls extends System {
   public async followEntity(entityId: string, stopDistance: number = FOLLOW_STOP_DISTANCE): Promise<void> {
     this.stopRandomWalk();
     this.stopNavigation("starting followEntity");
-
+  
     const token = new ControlsToken();
     this._currentWalkToken = token;
     this._isNavigating = true;
-
-    const tickDelay = (ms: number) => new Promise(res => setTimeout(res, ms));
-    const player = this.world.entities.player;
-
-    while (this._isNavigating && this._currentWalkToken === token && !token.aborted) {
+  
+    await this._navigateTowards(() => {
       const target = this.world.entities.items.get(entityId);
-      
-
-      if (!target) {
-        logger.warn(`[Controls followEntity] Target entity '${entityId}' not found or missing position.`);
-        this.stopNavigation("entity missing");
-        break;
-      }
-
-      if (!this._validatePlayerState("followEntity")) break;
-
-      const playerPos = v1.copy(player.base.position);
-      let targetPos = target?.base?.position || target?.root?.position;
-      targetPos = targetPos.clone();
-      const distance = playerPos.clone().setY(0).distanceTo(targetPos.clone().setY(0));
-
-      if (distance <= stopDistance) {
-        logger.info(`[Controls followEntity] Reached entity '${entityId}' within ${stopDistance}m.`);
-        this.stopNavigation("target reached");
-        break;
-      }
-
-      const direction = targetPos.clone().sub(playerPos).setY(0).normalize();
-      const desiredQuat = q1.setFromUnitVectors(FORWARD, direction);
-      player.base.quaternion = desiredQuat;
-      const yRot = e1.setFromQuaternion(player.base.quaternion, 'YXZ').y;
-      player.cam.rotation.y = yRot;
-
-      this.setKey('keyW', true);
-      this.setKey('keyS', false);
-      this.setKey('keyA', false);
-      this.setKey('keyD', false);
-      this.setKey('shiftLeft', false);
-
-      await tickDelay(CONTROLS_TICK_INTERVAL);
-    }
+      if (!target) return null;
+      return target.base?.position?.clone() || target.root?.position?.clone() || null;
+    }, stopDistance, token);
   }
+  
 
 
   /**
@@ -263,39 +229,113 @@ export class AgentControls extends System {
   private async startNavigation(x: number, z: number, token?: ControlsToken): Promise<void> {
     this.stopNavigation("starting new navigation");
   
+    const navigationToken = token ?? new ControlsToken();
+    this._currentWalkToken = navigationToken;
     this._navigationTarget = new THREE.Vector3(x, 0, z);
     this._isNavigating = true;
-    this._currentNavKeys = { forward: false, backward: false, left: false, right: false };
   
+    await this._navigateTowards(() => this._navigationTarget, NAVIGATION_STOP_DISTANCE, navigationToken);
+  }
+  
+
+  private async _navigateTowards(
+    getTargetPosition: () => THREE.Vector3 | null,
+    stopDistance: number,
+    token: ControlsToken
+  ): Promise<void> {
     const player = this.world.entities.player;
     const tickDelay = (ms: number) => new Promise(res => setTimeout(res, ms));
   
-    while (this._isNavigating && this._navigationTarget && (!token || !token.aborted)) {
-      if (!this._validatePlayerState("startNavigation")) break;
+    let previousPosition = player.base.position.clone();
+    let noProgressTicks = 0;
+    const STUCK_THRESHOLD = 0.05;
+    const MAX_NO_PROGRESS_TICKS = 10;
+    let recoveryAttempts = 0;
+    const MAX_RECOVERY_ATTEMPTS = 3;
+    const SPRINT_DISTANCE_THRESHOLD = 15.0;
   
-      const playerPosition = v1.copy(player.base.position);
-      const distanceXZ = playerPosition.clone().setY(0).distanceTo(this._navigationTarget.clone().setY(0));
+    while (!token.aborted && this._currentWalkToken === token) {
+      if (!this._validatePlayerState("_navigateTowards")) break;
   
-      if (distanceXZ <= NAVIGATION_STOP_DISTANCE) {
-        this.stopNavigation("navigateTo finished");
+      const targetPos = getTargetPosition();
+      if (!targetPos) {
+        logger.warn(`[Controls] Target position is null during navigation.`);
+        this.stopNavigation("target null");
         break;
-      };
+      }
   
-      const directionWorld = this._navigationTarget.clone().sub(playerPosition).setY(0).normalize();
-      const desiredLook = q1.setFromUnitVectors(FORWARD, directionWorld);
-      player.base.quaternion = desiredLook;
-      const baseRotationY = e1.setFromQuaternion(player.base.quaternion, 'YXZ').y;
-      player.cam.rotation.y = baseRotationY;
+      const playerPos = v1.copy(player.base.position);
+      const distance = playerPos.clone().setY(0).distanceTo(targetPos.clone().setY(0));
   
+      if (distance <= stopDistance) {
+        logger.info(`[Controls] Reached target within ${stopDistance}m.`);
+        this.stopNavigation("target reached");
+        break;
+      }
+  
+      // --- Stuck Detection ---
+      const progressDistance = playerPos.distanceTo(previousPosition);
+      if (progressDistance < STUCK_THRESHOLD) {
+        noProgressTicks++;
+      } else {
+        noProgressTicks = 0;
+      }
+      previousPosition.copy(playerPos);
+  
+      if (noProgressTicks >= MAX_NO_PROGRESS_TICKS) {
+        if (++recoveryAttempts > MAX_RECOVERY_ATTEMPTS) {
+          logger.error("[Controls] Max recovery attempts reached. Teleporting to target.");
+        
+          const targetPos = getTargetPosition();
+          if (targetPos) {
+            const direction = targetPos.clone().sub(player.base.position).setY(0).normalize();
+            const finalPosition = targetPos.clone().addScaledVector(direction, -stopDistance);
+            const yRotation = Math.atan2(-direction.x, -direction.z);
+        
+            player.teleport({
+              position: finalPosition,
+              rotationY: yRotation,
+            });
+          }
+        
+          this.stopNavigation("teleported after max recovery");
+          break;
+        }        
+  
+        logger.warn("[Controls] Stuck detected. Attempting recovery rotation.");
+        const randomDir: 'left' | 'right' = Math.random() < 0.5 ? 'left' : 'right';
+        try {
+          await Promise.race([
+            this.rotateTo(randomDir, 500),
+            tickDelay(1000), // fallback timeout
+          ]);
+        } catch (e) {
+          logger.error("[Controls] Rotation during stuck recovery failed:", e);
+        }
+        this.setKey('space', true);
+        noProgressTicks = 0;
+      } else {
+        // Face toward target
+        const direction = targetPos.clone().sub(playerPos).setY(0).normalize();
+        const desiredQuat = q1.setFromUnitVectors(FORWARD, direction);
+        player.base.quaternion = desiredQuat;
+        const yRot = e1.setFromQuaternion(player.base.quaternion, 'YXZ').y;
+        player.cam.rotation.y = yRot;
+        this.setKey('space', false);
+      }
+  
+      // Simulate movement
       this.setKey('keyW', true);
       this.setKey('keyS', false);
       this.setKey('keyA', false);
       this.setKey('keyD', false);
-      this.setKey('shiftLeft', false);
+      this.setKey('shiftLeft', distance > SPRINT_DISTANCE_THRESHOLD);
   
       await tickDelay(CONTROLS_TICK_INTERVAL);
     }
   }
+  
+  
 
   public async rotateTo(direction: 'front' | 'back' | 'left' | 'right', duration: number = 500): Promise<void> {
     const player = this.world?.entities?.player;
@@ -371,6 +411,7 @@ export class AgentControls extends System {
         // Release movement keys
         try {
             this.setKey('keyW', false);
+            this.setKey('space', false);
             this.setKey('keyA', false);
             this.setKey('keyS', false);
             this.setKey('keyD', false);

@@ -186,6 +186,7 @@ export class MessageManager {
     messages: Memory[];
     entities: Entity[];
   }) {
+    
     const messageStrings = messages
       .filter((message: Memory) => message.entityId)
       .reverse()
@@ -195,7 +196,24 @@ export class MessageManager {
         const messageActions = content.actions;
   
         const entity = entities.find((e: Entity) => e.id === message.entityId) as any;
-        const formattedName = entity?.names[0] || "Unknown User";
+        const formattedName = (() => {
+          try {
+            const parsedData = JSON.parse(entity?.data || '{}');
+            const hyperfyData = parsedData.hyperfy || {};
+            return (
+              hyperfyData.userName ||
+              hyperfyData.name ||
+              (entity?.names || []).find(n => n.toLowerCase() !== 'anonymous') ||
+              'Unknown User'
+            );
+          } catch (e) {
+            return (
+              (entity?.names || []).find(n => n.toLowerCase() !== 'anonymous') ||
+              'Unknown User'
+            );
+          }
+        })();
+
         const formattedId = entity ? JSON.parse(entity.data).hyperfy.id : "";
   
         const messageTime = new Date(message.createdAt);
@@ -233,12 +251,32 @@ export class MessageManager {
         unique: false,
       }),
     ]);
-    const formattedRecentMessages = this.formatMessages({
+    const formattedHistory = this.formatMessages({
       messages: recentMessagesData,
       entities: entitiesData,
     });
 
-    return formattedRecentMessages;
+    const lastResponseText = recentMessagesData
+      .filter(msg =>
+        msg.entityId === this.runtime.agentId &&
+        typeof msg.content?.text === 'string' &&
+        msg.content.text.trim() !== ''
+      )
+      .sort((a, b) => b.createdAt - a.createdAt)[0]?.content.text || null;
+
+    const lastActions = recentMessagesData
+      .filter(msg =>
+        msg.entityId === this.runtime.agentId &&
+        Array.isArray(msg.content?.actions) &&
+        msg.content.actions.length > 0
+      )
+      .sort((a, b) => b.createdAt - a.createdAt)[0]?.content.actions || [];
+
+    return {
+      formattedHistory,
+      lastResponseText,
+      lastActions,
+    };
   }
 
   private getService() {
