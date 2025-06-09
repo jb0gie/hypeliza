@@ -150,6 +150,7 @@ export class AgentControls extends System {
     const delay = (ms: number) => new Promise(res => setTimeout(res, ms));
     const token = new ControlsToken();
     this._currentWalkToken = token;
+    const tmpTarget = new THREE.Vector3(); 
     const walkLoop = async () => {
       const startTime = Date.now();
 
@@ -170,9 +171,13 @@ export class AgentControls extends System {
         const radius = Math.random() * maxDistance;
         const targetX = pos.x + Math.cos(angle) * radius;
         const targetZ = pos.z + Math.sin(angle) * radius;
-
         try {
-          await this.startNavigation(targetX, targetZ, token);
+          tmpTarget.set(targetX, 0, targetZ);
+          this.stopNavigation("starting new navigation");
+          this._currentWalkToken = token;
+          this._isNavigating = true;
+        
+          await this._navigateTowards(() => tmpTarget, NAVIGATION_STOP_DISTANCE, token, false);
         } catch (e) {
           logger.warn("[Random Walk] Navigation error:", e);
         }
@@ -213,23 +218,9 @@ export class AgentControls extends System {
    * Starts navigating the agent towards the target X, Z coordinates.
    */
   public async goto(x: number, z: number): Promise<void> {
-    this.stopRandomWalk();
-    await this.startNavigation(x, z);
-  }
-
-
-  /**
-   * Internal navigation method that moves the agent towards a target (x, z) position.
-   * It sets the player's rotation to face the direction of travel and simulates key presses
-   * (e.g., 'W' for forward movement) until the agent reaches the destination or navigation is stopped.
-   *
-   * This method is isolated and does not handle random walk logic — it's a low-level navigation primitive.
-   * Should be called by `goto` or `startRandomWalk` with an optional ControlsToken to allow early cancellation.
-   */
-  private async startNavigation(x: number, z: number, token?: ControlsToken): Promise<void> {
-    this.stopNavigation("starting new navigation");
+    this.stopAllActions("starting new navigation");
   
-    const navigationToken = token ?? new ControlsToken();
+    const navigationToken = new ControlsToken();
     this._currentWalkToken = navigationToken;
     this._navigationTarget = new THREE.Vector3(x, 0, z);
     this._isNavigating = true;
@@ -241,7 +232,8 @@ export class AgentControls extends System {
   private async _navigateTowards(
     getTargetPosition: () => THREE.Vector3 | null,
     stopDistance: number,
-    token: ControlsToken
+    token: ControlsToken,
+    allowSprint: boolean = true
   ): Promise<void> {
     const player = this.world.entities.player;
     const tickDelay = (ms: number) => new Promise(res => setTimeout(res, ms));
@@ -329,14 +321,12 @@ export class AgentControls extends System {
       this.setKey('keyS', false);
       this.setKey('keyA', false);
       this.setKey('keyD', false);
-      this.setKey('shiftLeft', distance > SPRINT_DISTANCE_THRESHOLD);
+      this.setKey('shiftLeft', allowSprint && distance > SPRINT_DISTANCE_THRESHOLD);
   
       await tickDelay(CONTROLS_TICK_INTERVAL);
     }
   }
   
-  
-
   public async rotateTo(direction: 'front' | 'back' | 'left' | 'right', duration: number = 500): Promise<void> {
     const player = this.world?.entities?.player;
     if (!player?.base) {
