@@ -1,5 +1,6 @@
 import { Readable } from 'node:stream';
 import { promises as fsPromises } from 'fs';
+import type { Action, IAgentRuntime, Memory, State } from '@elizaos/core';
 
 export async function hashFileBuffer(buffer: Buffer): Promise<string> {
     const hashBuf = await crypto.subtle.digest('SHA-256', buffer)
@@ -78,8 +79,6 @@ export const resolveUrl = async (url, world) => {
   url = `data:image/vnd.radiance;base64,${base64}`;
   return url;
 }
-
-import type { Action, IAgentRuntime, Memory, State } from '@elizaos/core';
 
 /**
  * Fetches and validates actions from the runtime.
