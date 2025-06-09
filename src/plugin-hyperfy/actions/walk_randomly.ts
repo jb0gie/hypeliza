@@ -19,7 +19,7 @@ const RANDOM_WALK_DEFAULT_MAX_DISTANCE = 30; // meters
 export const hyperfyWalkRandomlyAction: Action = {
     name: 'HYPERFY_WALK_RANDOMLY',
     similes: ['WANDER', 'PACE_AROUND', 'WALK_AROUND', 'MOVE_RANDOMLY'], // Reverted similes/desc
-    description: 'Makes the agent continuously walk to random nearby points until stopped.',
+    description: 'Makes your character wander to random points nearby; use for idle behavior or ambient movement.',
     validate: async (runtime: IAgentRuntime): Promise<boolean> => {
       const service = runtime.getService<HyperfyService>(HyperfyService.serviceType);
       // Keep validation simple: Check if controls exist

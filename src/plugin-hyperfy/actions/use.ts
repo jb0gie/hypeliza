@@ -34,7 +34,7 @@ Response format:
 export const hyperfyUseItemAction: Action = {
   name: 'HYPERFY_USE_ITEM',
   similes: ['INTERACT_WITH_ITEM', 'USE_NEARBY_OBJECT', 'PICK_UP_ITEM'],
-  description: 'Navigates to a nearby interactive entity and interacts with it, such as picking it up or activating it, based on context.',
+  description: 'Walks to and interacts with a nearby usable item (like picking it up); use when a player asks you to use or grab something.',
   validate: async (runtime: IAgentRuntime): Promise<boolean> => {
     const service = runtime.getService<HyperfyService>(HyperfyService.serviceType);
     const world = service?.getWorld();

@@ -12,7 +12,7 @@ import {
   export const hyperfyUnuseItemAction: Action = {
     name: 'HYPERFY_UNUSE_ITEM',
     similes: ['RELEASE_ITEM', 'DROP_ITEM', 'CANCEL_INTERACTION'],
-    description: 'Stops interacting with the currently held or active item in the Hyperfy world.',
+    description: `Drops or stops interacting with the currently held item; use when a player tells you to release it or you're done using it.`,
     validate: async (runtime: IAgentRuntime): Promise<boolean> => {
       const service = runtime.getService<HyperfyService>(HyperfyService.serviceType);
       const world = service?.getWorld();

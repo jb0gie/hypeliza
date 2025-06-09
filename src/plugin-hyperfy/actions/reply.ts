@@ -75,8 +75,7 @@ function extractReplyContent(response: Memory, replyFieldKeys: string[]): Conten
 export const replyAction = {
   name: 'REPLY',
   similes: ['GREET', 'REPLY_TO_MESSAGE', 'SEND_REPLY', 'RESPOND', 'RESPONSE'],
-  description:
-    'Replies to the current conversation with the text from the generated message. Default if the agent is responding with a message and no other action. Use REPLY at the beginning of a chain of actions as an acknowledgement, and at the end of a chain of actions as a final response.',
+  description: `Sends a direct message into in-game chat to a player; always use this first when you're speaking in response to someone.`,
   validate: async (_runtime: IAgentRuntime) => {
     return true;
   },
@@ -103,10 +102,7 @@ export const replyAction = {
     }
 
     // Only generate response using LLM if no suitable response was found
-    state = await runtime.composeState(message, [
-      ...(message.content.providers ?? []),
-      'RECENT_MESSAGES',
-    ]);
+    state = await runtime.composeState(message);
 
     const prompt = composePromptFromState({
       state,
