@@ -1,8 +1,7 @@
 import 'ses';
 
-import type { MessagePayload, Plugin, WorldPayload } from '@elizaos/core';
+import type { Plugin } from '@elizaos/core';
 import {
-  EventType,
   logger
 } from '@elizaos/core';
 import { HyperfyService } from './service';
@@ -16,8 +15,13 @@ import { hyperfyWalkRandomlyAction } from './actions/walk_randomly';
 import { hyperfyAmbientSpeechAction } from './actions/ambient';
 import { hyperfyScenePerceptionAction } from './actions/perception';
 import { hyperfyEditEntityAction } from './actions/build';
+import { replyAction } from './actions/reply';
+import { ignoreAction } from './actions/ignore';
 import { hyperfyProvider } from './providers/world';
 import { hyperfyEmoteProvider } from './providers/emote';
+import { actionsProvider } from './providers/actions';
+import { characterProvider } from './providers/character';
+import { hyperfyEvents } from './events';
 
 // --- Hardcoded values matching agent/index.mjs ---
 const HYPERFY_WS_URL = process.env.WS_URL || 'wss://chill.hyperfy.xyz/ws'
@@ -58,21 +62,26 @@ export const hyperfyPlugin: Plugin = {
     }
   },
   services: [
-      HyperfyService // Register the Hyperfy service
+    HyperfyService
   ],
+  events: hyperfyEvents,
   actions: [
-      hyperfyScenePerceptionAction,
-      hyperfyGotoEntityAction,
-      hyperfyUseItemAction,
-      hyperfyUnuseItemAction,
-      hyperfyStopMovingAction,
-      hyperfyWalkRandomlyAction,
-      hyperfyAmbientSpeechAction,
-      hyperfyEditEntityAction,
+    hyperfyScenePerceptionAction,
+    hyperfyGotoEntityAction,
+    hyperfyUseItemAction,
+    hyperfyUnuseItemAction,
+    hyperfyStopMovingAction,
+    hyperfyWalkRandomlyAction,
+    hyperfyAmbientSpeechAction,
+    hyperfyEditEntityAction,
+    replyAction,
+    ignoreAction
   ],
   providers: [
-      hyperfyProvider, // Register the Hyperfy provider
-      hyperfyEmoteProvider
+    hyperfyProvider,
+    hyperfyEmoteProvider,
+    actionsProvider,
+    characterProvider
   ],
 };
 

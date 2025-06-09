@@ -1,7 +1,8 @@
-import { ChannelType, Content, EventType, HandlerCallback, IAgentRuntime, Memory, ModelType, UUID, createUniqueUuid, getWavHeader, logger } from "@elizaos/core";
+import { ChannelType, Content, HandlerCallback, IAgentRuntime, Memory, ModelType, UUID, createUniqueUuid, getWavHeader, logger } from "@elizaos/core";
 import { HyperfyService } from "../service";
 import { convertToAudioBuffer } from "../utils";
 import { agentActivityLock } from "./guards";
+import { hyperfyEventType } from "../events";
 
 type LiveKitAudioData = {
   participant: string;
@@ -239,7 +240,7 @@ export class VoiceManager {
 
       agentActivityLock.enter();
       // Emit voice-specific events
-      this.runtime.emitEvent([EventType.VOICE_MESSAGE_RECEIVED], {
+      this.runtime.emitEvent([hyperfyEventType.VOICE_MESSAGE_RECEIVED], {
         runtime: this.runtime,
         message: memory,
         callback,

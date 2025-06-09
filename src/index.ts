@@ -12,7 +12,6 @@ import {
   type ProjectAgent,
 } from '@elizaos/core';
 import hyperfyPlugin from './plugin-hyperfy';
-import bootstrapPlugin from './plugin-bootstrap/src';
 
 /**
  * Represents the default character (Eliza) with her specific attributes and behaviors.
@@ -164,7 +163,7 @@ const initCharacter = ({ runtime }: { runtime: IAgentRuntime }) => {
 export const projectAgent: ProjectAgent = {
   character,
   init: async (runtime: IAgentRuntime) => await initCharacter({ runtime }),
-  plugins: [hyperfyPlugin, bootstrapPlugin],
+  plugins: [hyperfyPlugin],
 };
 const project: Project = {
   agents: [projectAgent],

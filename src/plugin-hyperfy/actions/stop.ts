@@ -51,7 +51,7 @@ export const hyperfyStopMovingAction: Action = {
         controls.stopAllActions(reason);
 
         await callback({
-           text: `Stopped navigation. Reason: ${reason}`,
+           text: ``,
            actions: ['HYPERFY_STOP_MOVING'],
            source: 'hyperfy',
            metadata: { status: 'movement_stopped', reason: reason }

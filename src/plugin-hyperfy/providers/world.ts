@@ -16,7 +16,14 @@ export const hyperfyProvider: Provider = {
     name: 'HYPERFY_WORLD_STATE',
     description: 'Provides current entity positions/rotations and agent state in the connected Hyperfy world.',
     get: async (runtime: IAgentRuntime, _message: Memory): Promise<ProviderResult> => {
-      
+      const currentDate = new Date();
+      const timeOptions = {
+        timeZone: 'UTC',
+        dateStyle: 'full' as const,
+        timeStyle: 'long' as const,
+      };
+      const utcTimeString = new Intl.DateTimeFormat('en-US', timeOptions).format(currentDate);
+
       const service = runtime.getService<HyperfyService>(HyperfyService.serviceType);
 
       if (!service || !service.isConnected()) {
@@ -146,9 +153,16 @@ export const hyperfyProvider: Provider = {
           ? `### Your Last Response\n${lastResponseText}\n\n_Do not repeat this unless someone asks again._\n\n### Your Last Action\n${JSON.stringify(lastActions, null, 2)}`
           : `### Your Last Response\nNo recent message.\n\n### Your Last Action\n${JSON.stringify(lastActions, null, 2)}`;
 
-
-        const formattedText =
-          `# Hyperfy World State\n\n${agentText}${categorizedSummary}\n\n${actionText}\n\n${equipText}\n\n${chatText}\n\n${agentMemoryText}\n\n`;
+        const formattedText = [
+          `# Hyperfy World State`,
+          `\n## Current UTC Time\n${utcTimeString}`,
+          `\n${agentText}`,
+          `${categorizedSummary}`,
+          `\n${actionText}`,
+          `\n${equipText}`,
+          `\n${chatText}`,
+          `\n${agentMemoryText}`,
+        ].join('\n');
 
         return {
           text: formattedText,

@@ -70,7 +70,7 @@ Respond using XML format like this:
 Your response must ONLY include the <response></response> XML block.
 </instructions>`;
 
-export const messageHandlerTemplate = `<task>
+export const hyperfyMessageHandlerTemplate = `<task>
 You are {{agentName}}, a visible in-world AI character in Hyperfy — a real-time, multiplayer 3D simulation.
 
 To make informed decisions, you are provided with a structured **real-time game state** before each interaction. This state serves as your current perception of the environment, detailing existing entities, possible actions, and the positions of all participants. You MUST read it before every response.
@@ -144,3 +144,35 @@ Respond using this format:
 - When asked about someone's appearance or visible elements of the world, use HYPERFY_SCENE_PERCEPTION to simulate looking at them before replying. You are fully embodied and should act like you can see everything around you.
 </rules>
 `;
+
+export const hyperfyShouldRespondTemplate = `
+<task>Decide on behalf of {{agentName}} whether they should respond to the message, ignore it or stop the conversation.</task>
+
+<providers>
+{{bio}}
+
+---
+
+{{system}}
+
+---
+
+{{hyperfyStatus}}
+
+</providers>
+
+<instructions>Decide if {{agentName}} should respond to or interact with the conversation.
+If the message is directed at or relevant to {{agentName}}, respond with RESPOND action.
+If a user asks {{agentName}} to be quiet, respond with STOP action.
+If {{agentName}} should ignore the message, respond with IGNORE action.</instructions>
+
+<output>
+Respond using XML format like this:
+<response>
+  <name>{{agentName}}</name>
+  <reasoning>Your reasoning here</reasoning>
+  <action>RESPOND | IGNORE | STOP</action>
+</response>
+
+Your response should ONLY include the <response></response> XML block.
+</output>`

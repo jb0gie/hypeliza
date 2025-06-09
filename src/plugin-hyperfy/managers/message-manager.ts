@@ -1,7 +1,7 @@
-import { ChannelType, Entity, Content, EventType, HandlerCallback, IAgentRuntime, Memory, UUID, formatTimestamp, createUniqueUuid, getEntityDetails } from "@elizaos/core";
+import { ChannelType, Entity, Content, HandlerCallback, IAgentRuntime, Memory, UUID, formatTimestamp, createUniqueUuid, getEntityDetails } from "@elizaos/core";
 import { HyperfyService } from "../service";
 import { agentActivityLock } from "./guards";
-import { messageHandlerTemplate } from "../templates";
+import { hyperfyEventType } from "../events";
 
 export class MessageManager {
   private runtime: IAgentRuntime;
@@ -11,7 +11,6 @@ export class MessageManager {
     if (!this.runtime.character.templates) {
       this.runtime.character.templates = {};
     }
-    this.runtime.character.templates.messageHandlerTemplate = messageHandlerTemplate;
   }
 
   async handleMessage(msg): Promise<void> {
@@ -130,7 +129,7 @@ export class MessageManager {
         // Emit the MESSAGE_RECEIVED event to trigger the message handler
         console.info(`[Hyperfy Chat] Emitting MESSAGE_RECEIVED event for message: ${messageId}`)
         agentActivityLock.enter();
-        await this.runtime.emitEvent(EventType.MESSAGE_RECEIVED, {
+        await this.runtime.emitEvent(hyperfyEventType.MESSAGE_RECEIVED, {
             runtime: this.runtime,
             message: memory,
             callback: callback,
