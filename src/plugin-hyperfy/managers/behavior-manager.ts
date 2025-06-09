@@ -2,6 +2,7 @@ import { ChannelType, Content, HandlerCallback, IAgentRuntime, Memory, ModelType
 import { HyperfyService } from "../service";
 import { autoTemplate } from "../templates";
 import { agentActivityLock } from "./guards";
+import { getHyperfyActions, formatActions } from "../utils";
 
 const TIME_INTERVAL_MIN = 15000; // 15 seconds
 const TIME_INTERVAL_MAX = 30000; // 30 seconds
@@ -113,7 +114,23 @@ export class BehaviorManager {
 
     const state = await this.runtime.composeState(newMessage);
 
-    const responsePrompt = composePromptFromState({ state, template: autoTemplate() });
+    const actionsData = await getHyperfyActions(
+      this.runtime, 
+      newMessage, 
+      state, [
+        'HYPERFY_GOTO_ENTITY',
+        'HYPERFY_WALK_RANDOMLY',
+        'HYPERFY_USE_ITEM',
+        'HYPERFY_UNUSE_ITEM',
+        'HYPERFY_AMBIENT_SPEECH',
+        'REPLY',
+        'IGNORE',
+      ]
+    );
+
+    const actionsText = actionsData.length > 0 ? formatActions(actionsData) : '';
+
+    const responsePrompt = composePromptFromState({ state, template: autoTemplate(actionsText) });
 
     // decide
     const response = await this.runtime.useModel(ModelType.TEXT_LARGE, {

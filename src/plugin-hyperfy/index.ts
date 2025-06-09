@@ -19,7 +19,7 @@ import { replyAction } from './actions/reply';
 import { ignoreAction } from './actions/ignore';
 import { hyperfyProvider } from './providers/world';
 import { hyperfyEmoteProvider } from './providers/emote';
-import { actionsProvider } from './providers/actions';
+import { hyperfyActionsProvider } from './providers/actions';
 import { characterProvider } from './providers/character';
 import { hyperfyEvents } from './events';
 
@@ -80,7 +80,7 @@ export const hyperfyPlugin: Plugin = {
   providers: [
     hyperfyProvider,
     hyperfyEmoteProvider,
-    actionsProvider,
+    hyperfyActionsProvider,
     characterProvider
   ],
 };

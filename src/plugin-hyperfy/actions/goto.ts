@@ -71,7 +71,7 @@ Only return the JSON object. Do not include any extra text or comments.
 export const hyperfyGotoEntityAction: Action = {
     name: 'HYPERFY_GOTO_ENTITY',
     similes: ['GO_TO_ENTITY_IN_WORLD', 'MOVE_TO_ENTITY', 'NAVIGATE_TO_ENTITY'],
-    description: 'Navigates the agent to the specified entity ID or position within the connected Hyperfy world using the AgentControls system.',
+    description: 'Moves your character to a specified player, object, or world position; use when you need to approach something or go somewhere before interacting.',
     validate: async (runtime: IAgentRuntime): Promise<boolean> => {
       const service = runtime.getService<HyperfyService>(HyperfyService.serviceType);
       // Check if connected and if controls are available

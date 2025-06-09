@@ -137,8 +137,7 @@ export const messageReceivedHandler = async ({
         console.log('[Bootstrap] Parsed response:', responseObject);
 
         const shouldRespond = responseObject?.action && responseObject.action === 'RESPOND';
-      
-
+        
         let responseMessages: Memory[] = [];
 
         if (shouldRespond) {

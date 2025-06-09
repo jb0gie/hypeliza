@@ -1,5 +1,6 @@
 import { Readable } from 'node:stream';
 import { promises as fsPromises } from 'fs';
+import type { Action, IAgentRuntime, Memory, State } from '@elizaos/core';
 
 export async function hashFileBuffer(buffer: Buffer): Promise<string> {
     const hashBuf = await crypto.subtle.digest('SHA-256', buffer)
@@ -77,4 +78,46 @@ export const resolveUrl = async (url, world) => {
   const base64 = fileBuffer.toString('base64');
   url = `data:image/vnd.radiance;base64,${base64}`;
   return url;
+}
+
+/**
+ * Fetches and validates actions from the runtime.
+ * If `includeList` is provided, filters actions by those names only.
+ *
+ * @param runtime - The agent runtime
+ * @param message - The message memory
+ * @param state - The state
+ * @param includeList - Optional list of action names to include
+ * @returns Array of validated actions
+ */
+export async function getHyperfyActions(
+  runtime: IAgentRuntime,
+  message: Memory,
+  state: State,
+  includeList?: string[]
+): Promise<Action[]> {
+  const availableActions = includeList
+    ? runtime.actions.filter((action) => includeList.includes(action.name))
+    : runtime.actions;
+
+  const validated = await Promise.all(
+    availableActions.map(async (action) => {
+      const result = await action.validate(runtime, message, state);
+      return result ? action : null;
+    })
+  );
+
+  return validated.filter(Boolean) as Action[];
+}
+
+/**
+ * Formats the provided actions into a detailed string listing each action's name and description, separated by commas and newlines.
+ * @param actions - An array of `Action` objects to format.
+ * @returns A detailed string of actions, including names and descriptions.
+ */
+export function formatActions(actions: Action[]) {
+  return actions
+    .sort(() => 0.5 - Math.random())
+    .map((action: Action) => `- **${action.name}**: ${action.description}`)
+    .join('\n\n');
 }

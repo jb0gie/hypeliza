@@ -51,8 +51,7 @@ function extractAmbientContent(response: Memory, fieldKeys: string[]): Content |
 export const hyperfyAmbientSpeechAction = {
   name: 'HYPERFY_AMBIENT_SPEECH',
   similes: ['MONOLOGUE', 'OBSERVE', 'SELF_TALK', 'ENVIRONMENTAL_REMARK'],
-  description:
-    'The agent says something aloud without addressing any user. Use for observations, thoughts, or subtle remarks directed at the environment. Never combine this with REPLY.',
+  description: 'Says something aloud without addressing anyone; use for idle thoughts, atmosphere, or commentary when not in conversation.',
   validate: async (_runtime: IAgentRuntime) => true,
   handler: async (
     runtime: IAgentRuntime,

@@ -1,7 +1,4 @@
-import { HYPERFY_ACTIONS } from "./constants";
-
-
-export const autoTemplate = () => `
+export const autoTemplate = (actionsText) => `
 <note>
 This is a regular behavior update from {{agentName}}, not triggered by a user message.
 
@@ -28,9 +25,7 @@ When using REPLY or HYPERFY_AMBIENT_SPEECH, the spoken message in the "text" fie
 ---
 
 # Available Actions:
-${HYPERFY_ACTIONS.map(
-  (a) => `- **${a.name}**: ${a.description}`
-).join('\n')}
+${actionsText}
 
 
 ---

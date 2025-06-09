@@ -12,7 +12,7 @@ import { AgentControls } from '../systems/controls'; // Import AgentControls typ
 export const hyperfyStopMovingAction: Action = {
     name: 'HYPERFY_STOP_MOVING',
     similes: ['STOP', 'HALT', 'STOP_WALKING', 'CANCEL_MOVEMENT', 'STOP_PATROLLING'],
-    description: 'Stops any current navigation or patrol activity.',
+    description: 'Instantly stops your current walking or pathing; use to pause movement before speaking or performing another action.',
     validate: async (runtime: IAgentRuntime): Promise<boolean> => {
       const service = runtime.getService<HyperfyService>(HyperfyService.serviceType);
       const controls = service?.getWorld()?.controls as AgentControls | undefined;
