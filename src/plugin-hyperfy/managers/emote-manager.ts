@@ -2,7 +2,7 @@ import fs from 'fs/promises'
 import path from 'path'
 import { EMOTES_LIST } from '../constants.js'
 import { Emotes } from '../hyperfy/src/core/extras/playerEmotes.js'
-import { hashFileBuffer } from '../utils'
+import { hashFileBuffer, getModuleDirectory } from '../utils'
 import { IAgentRuntime, logger } from '@elizaos/core'
 import { HyperfyService } from '../service.js'
 
@@ -21,7 +21,8 @@ export class EmoteManager {
   async uploadEmotes() {
     for (const emote of EMOTES_LIST) {
       try {
-        const emoteBuffer = await fs.readFile(path.resolve(emote.path));
+        const moduleDirPath = getModuleDirectory();
+        const emoteBuffer = await fs.readFile(moduleDirPath + emote.path);
         const emoteMimeType = "model/gltf-binary";
 
         const emoteHash = await hashFileBuffer(emoteBuffer);
