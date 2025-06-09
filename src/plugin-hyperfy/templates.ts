@@ -1,6 +1,3 @@
-import { HYPERFY_ACTIONS } from "./constants";
-
-
 export const autoTemplate = (actionsText) => `
 <note>
 This is a regular behavior update from {{agentName}}, not triggered by a user message.
