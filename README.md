@@ -71,4 +71,19 @@ You can optionally enable voice chat support via one of the following methods:
 
 ---
 
+## 🖼️ Optional: Enable Screen Perception
+
+To enable **screen perception** (where Eliza can describe what's visible in the 3D scene), you must use an LLM plugin that supports **image description**.
+
+### Requirements:
+
+* Include an LLM plugin in your character config that supports vision/image inputs.
+
+  * For example, a plugin wrapping OpenAI's GPT-4o or Gemini with vision support.
+* Ensure your `.env` is configured with the appropriate API key and any required parameters for that LLM.
+
+This will allow Eliza to "see" the scene and respond based on visual content from the rendered environment.
+
+---
+
 Feel free to open issues or contribute if you're building something cool with Eliza and Hyperfy!
