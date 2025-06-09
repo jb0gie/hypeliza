@@ -137,7 +137,7 @@ export const messageReceivedHandler = async ({
         console.log('[Bootstrap] Parsed response:', responseObject);
 
         const shouldRespond = responseObject?.action && responseObject.action === 'RESPOND';
-            
+        
         let responseMessages: Memory[] = [];
 
         if (shouldRespond) {
@@ -147,8 +147,6 @@ export const messageReceivedHandler = async ({
             state,
             template: hyperfyMessageHandlerTemplate,
           });
-
-          console.log("deigbgigbigbgigb", prompt)
 
           let responseContent: Content | null = null;
 
