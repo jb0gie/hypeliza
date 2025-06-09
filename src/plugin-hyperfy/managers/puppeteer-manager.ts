@@ -1,4 +1,4 @@
-//@ts-nocheck
+////@ts-nocheck
 import path from 'path'
 import fs from 'fs'
 import { promises as fsPromises } from 'fs';
@@ -7,6 +7,8 @@ import { IAgentRuntime, ModelType } from '@elizaos/core'
 import { HyperfyService } from '../service.js'
 import * as THREE from 'three';
 import { resolveUrl } from '../utils.js';
+import { getModuleDirectory } from '../utils.js';
+
 
 export class PuppeteerManager {
   private static instance: PuppeteerManager | null = null
@@ -52,15 +54,16 @@ export class PuppeteerManager {
         })
 
         this.page = await this.browser.newPage()
-        const filePath = path.resolve('puppeteer/index.html')
+        const moduleDirPath = getModuleDirectory();
+        const filePath = moduleDirPath + '/puppeteer/index.html';
 
         await this.page.goto(`file://${filePath}`, { waitUntil: 'load' })
 
         await this.injectScripts([
-          'scripts/createVRMFactory.js',
-          'scripts/snapshotEquirectangular.js',
-          'scripts/snapshotFacingDirection.js',
-          'scripts/snapshotViewToTarget.js'
+          `${moduleDirPath}/scripts/createVRMFactory.js`,
+          `${moduleDirPath}/scripts/snapshotEquirectangular.js`,
+          `${moduleDirPath}/scripts/snapshotFacingDirection.js`,
+          `${moduleDirPath}/scripts/snapshotViewToTarget.js`
         ]);
 
         await this.page.waitForFunction(() =>

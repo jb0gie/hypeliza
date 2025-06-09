@@ -1,6 +1,9 @@
 import { Readable } from 'node:stream';
 import { promises as fsPromises } from 'fs';
 import type { Action, IAgentRuntime, Memory, State } from '@elizaos/core';
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
+
 
 export async function hashFileBuffer(buffer: Buffer): Promise<string> {
     const hashBuf = await crypto.subtle.digest('SHA-256', buffer)
@@ -51,6 +54,12 @@ export async function convertToAudioBuffer(speechResponse: any): Promise<Buffer>
   throw new Error('Unexpected response type from TEXT_TO_SPEECH model');
 }
 
+export function getModuleDirectory(): string {
+  const __filename = fileURLToPath(import.meta.url);
+  const __dirname = dirname(__filename);
+  return __dirname
+}
+
 export const resolveUrl = async (url, world) => {
   if (typeof url !== "string") {
     console.error(`Invalid URL type provided: ${typeof url}`);
@@ -74,6 +83,8 @@ export const resolveUrl = async (url, world) => {
     `[AgentLoader] Cannot resolve potentially relative URL without base: ${url}`
   );
   
+  const moduleDirPath = getModuleDirectory();
+  url = `${moduleDirPath}/${url}`;
   const fileBuffer = await fsPromises.readFile(url);
   const base64 = fileBuffer.toString('base64');
   url = `data:image/vnd.radiance;base64,${base64}`;
