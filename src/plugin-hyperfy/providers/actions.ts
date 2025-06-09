@@ -1,18 +1,6 @@
 import type { Action, IAgentRuntime, Memory, Provider, State } from '@elizaos/core';
 import { addHeader, composeActionExamples, formatActionNames } from '@elizaos/core';
-
-
-/**
- * Formats the provided actions into a detailed string listing each action's name and description, separated by commas and newlines.
- * @param actions - An array of `Action` objects to format.
- * @returns A detailed string of actions, including names and descriptions.
- */
-export function formatActions(actions: Action[]) {
-  return actions
-    .sort(() => 0.5 - Math.random())
-    .map((action: Action) => `- **${action.name}**: ${action.description}`)
-    .join('\n\n');
-}
+import { getHyperfyActions, formatActions } from '../utils';
 
 /**
  * A provider object that fetches possible response actions based on the provided runtime, message, and state.
@@ -46,52 +34,25 @@ export function formatActions(actions: Action[]) {
  * @param {State} state - The state of the agent
  * @returns {Object} Object containing data, values, and text related to actions
  */
-export const actionsProvider: Provider = {
+export const hyperfyActionsProvider: Provider = {
   name: 'ACTIONS',
   description: 'Possible response actions',
   position: -1,
   get: async (runtime: IAgentRuntime, message: Memory, state: State) => {
-    // Get actions that validate for this message
-    const actionPromises = runtime.actions.map(async (action: Action) => {
-      const result = await action.validate(runtime, message, state);
-      if (result) {
-        return action;
-      }
-      return null;
-    });
+    const actionsData = await getHyperfyActions(runtime, message, state); // ← no includeList passed here
 
-    const resolvedActions = await Promise.all(actionPromises);
-
-    const actionsData = resolvedActions.filter(Boolean) as Action[];
-
-    // Format action-related texts
     const actionNames = `Possible response actions: ${formatActionNames(actionsData)}`;
-
     const actions =
       actionsData.length > 0 ? addHeader('# Available Actions', formatActions(actionsData)) : '';
-
     const actionExamples =
       actionsData.length > 0
         ? addHeader('# Action Examples', composeActionExamples(actionsData, 10))
         : '';
 
-    const data = {
-      actionsData,
-    };
+    const data = { actionsData };
+    const values = { actions, actionNames, actionExamples };
+    const text = [actionNames, actionExamples, actions].filter(Boolean).join('\n\n');
 
-    const values = {
-      actions,
-      actionNames,
-      actionExamples,
-    };
-
-    // Combine all text sections
-    const text = [actionNames, actionExamples, actions].filter(Boolean).join('\n\n')
-
-    return {
-      data,
-      values,
-      text,
-    };
+    return { data, values, text };
   },
 };

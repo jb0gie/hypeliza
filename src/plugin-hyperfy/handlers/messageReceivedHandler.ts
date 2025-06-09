@@ -148,6 +148,8 @@ export const messageReceivedHandler = async ({
             template: hyperfyMessageHandlerTemplate,
           });
 
+          console.log("deigbgigbigbgigb", prompt)
+
           let responseContent: Content | null = null;
 
           // Retry if missing required fields
