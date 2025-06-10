@@ -101,13 +101,6 @@ export const resolveUrl = async (url, world) => {
     return url;
   }
   
-  // const moduleDirPath = getModuleDirectory();
-  // const fullPath = path.resolve(moduleDirPath, url);
-  // const fileBuffer = await fsPromises.readFile(fullPath);
-  // const mimeType = getMimeTypeFromPath(fullPath);
-  // const base64 = fileBuffer.toString('base64');
-  // return `data:${mimeType};base64,${base64}`;
-
   try {
     const buffer = await fsPromises.readFile(url);
     const mimeType = getMimeTypeFromPath(url);
