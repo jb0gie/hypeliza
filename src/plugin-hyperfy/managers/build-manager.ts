@@ -119,7 +119,11 @@ export class BuildManager {
     }
   }
 
-  async import(url) {
+  async importEntity(
+    url: string,
+    position?: any,
+    quaternion?: any
+  ) {
     const service = this.getService();
     const world = service.getWorld();
     const resolvedUrlurl = await resolveUrl(url, world);
@@ -138,10 +142,22 @@ export class BuildManager {
       console.error(`File too large. Maximum size is ${maxSize / (1024 * 1024)}MB`)
       return
     }
-    const transform = {
-      position:[0, 0, 0], 
-      quaternion: [0, 0, 0, 1]
+    const validVec3 = (v: any): v is [number, number, number] =>
+      Array.isArray(v) && v.length === 3 && v.every(n => typeof n === 'number');
+
+    const validQuat = (q: any): q is [number, number, number, number] =>
+      Array.isArray(q) && q.length === 4 && q.every(n => typeof n === 'number');
+
+    if (validVec3(position)) {
+      const controls = world.controls;
+      if (controls) {
+        await controls.goto(position[0], position[2]);
+      }
     }
+    const transform = {
+      position: validVec3(position) ? position : [0, 0, 0],
+      quaternion: validQuat(quaternion) ? quaternion : [0, 0, 0, 1],
+    };
     const ext = file.name.split('.').pop().toLowerCase()
     if (ext === 'hyp') {
       this.addApp(file, transform)
