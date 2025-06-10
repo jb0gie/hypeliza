@@ -100,16 +100,38 @@ export const resolveUrl = async (url, world) => {
   if (url.startsWith("http://") || url.startsWith("https://")) {
     return url;
   }
-  console.warn(
-    `[AgentLoader] Cannot resolve potentially relative URL without base: ${url}`
-  );
+  
+  // const moduleDirPath = getModuleDirectory();
+  // const fullPath = path.resolve(moduleDirPath, url);
+  // const fileBuffer = await fsPromises.readFile(fullPath);
+  // const mimeType = getMimeTypeFromPath(fullPath);
+  // const base64 = fileBuffer.toString('base64');
+  // return `data:${mimeType};base64,${base64}`;
 
-  const moduleDirPath = getModuleDirectory();
-  const fullPath = path.resolve(moduleDirPath, url);
-  const fileBuffer = await fsPromises.readFile(fullPath);
-  const mimeType = getMimeTypeFromPath(fullPath);
-  const base64 = fileBuffer.toString('base64');
-  return `data:${mimeType};base64,${base64}`;
+  try {
+    const buffer = await fsPromises.readFile(url);
+    const mimeType = getMimeTypeFromPath(url);
+    return `data:${mimeType};base64,${buffer.toString('base64')}`;
+  } catch (err: any) {
+    console.warn(`File not found at "${url}", falling back to resolve relative to module directory.`);
+  }
+
+  // Fallback: resolve relative to module directory
+  const moduleDir = getModuleDirectory();
+  const fullPath = path.resolve(moduleDir, url);
+
+  try {
+    const buffer = await fsPromises.readFile(fullPath);
+    const mimeType = getMimeTypeFromPath(fullPath);
+    return `data:${mimeType};base64,${buffer.toString('base64')}`;
+  } catch (err: any) {
+    if (err.code === 'ENOENT') {
+      console.error(`[AgentLoader] File not found at either "${url}" or "${fullPath}"`);
+    } else {
+      console.error(`Error reading fallback file at "${fullPath}":`, err);
+    }
+    return null;
+  }
 }
 
 /**
