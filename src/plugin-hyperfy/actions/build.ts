@@ -259,16 +259,8 @@ ${summary}
             break;
         }
         if (description) {
-            const agentPlayerId = world.entities.player.data.id
-            const agentPlayerName = service.getEntityName(agentPlayerId) || world.entities.player.data?.name || 'Hyperliza'      
-            world.chat.add(
-                {
-                    body: description,
-                    fromId: agentPlayerId,
-                    from: agentPlayerName,
-                },
-                true
-            )
+          const messageManager = service.getMessageManager();
+          messageManager.sendMessage(description);
         }
       }
       const summaryText = operationResults.operations.map(op => {
