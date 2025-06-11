@@ -205,7 +205,7 @@ export class AgentControls extends System {
     const token = new ControlsToken();
     this._currentWalkToken = token;
     this._isNavigating = true;
-  
+    v2.set(0, 0, 0);
     await this._navigateTowards(() => {
       const target = this.world.entities.items.get(entityId);
       if (!target) return v2;
