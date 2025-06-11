@@ -19,7 +19,7 @@ import {
     ROTATE = 'rotate',
     SCALE = 'scale',
     DELETE = 'delete',
-    CREATE = 'create'
+    IMPORT = 'import'
   }
   
 const sceneEditOperationExtractionTemplate = `
@@ -29,9 +29,13 @@ const sceneEditOperationExtractionTemplate = `
   # Supported Operations:
   - "duplicate": Duplicate an existing entity.
   - "delete": Remove an entity.
-  - "translate": Move an entity to a new position → "translate": [x, y, z]
-  - "rotate": Rotate an entity using a quaternion → "rotate": [x, y, z, w]
+  - "translate": Move an entity to a new position → "position": [x, y, z]
+  - "rotate": Rotate an entity using a quaternion → "rotation": [x, y, z, w]
   - "scale": Scale an entity → "scale": [x, y, z]
+  - "import": Add a new entity into the scene → requires:
+    - "position": [x, y, z]
+    - "rotation": [x, y, z, w]
+    - "target": must be a URL to the asset (e.g. https://assets.hyperfy.io/model.glb)
   
   # Output Format:
   Return a single JSON object with an **"operations"** array inside. Each item must match one of these two formats:
@@ -40,9 +44,9 @@ const sceneEditOperationExtractionTemplate = `
   {
     "success": true,
     "operation": "translate",
-    "targetEntityId": "VLvCb3w5G2",
+    "target": "VLvCb3w5G2",
     "parameters": {
-      "translate": [4.17, 10.0, -14.33]
+      "position": [4.17, 10.0, -14.33]
     },
     "description": "Moved Seat App 10 meters upward"
   }
@@ -62,17 +66,27 @@ const sceneEditOperationExtractionTemplate = `
     "operations": [
       {
         "success": true,
+        "operation": "import",
+        "target": "https://assets.hyperfy.io/sculpture.glb",
+        "parameters": {
+          "position": [0, 1, 0],
+          "rotation": [0, 0, 0, 1]
+        },
+        "description": "Imported a new sculpture facing the plaza"
+      },
+      {
+        "success": true,
         "operation": "duplicate",
-        "targetEntityId": "qr66FaMVIj",
+        "target": "qr66FaMVIj",
         "parameters": {},
         "description": "Duplicated block"
       },
       {
         "success": true,
         "operation": "translate",
-        "targetEntityId": "w9IsHHksuo",
+        "target": "w9IsHHksuo",
         "parameters": {
-          "translate": [0, 2, 0]
+          "position": [0, 2, 0]
         },
         "description": "Moved block upward"
       },
@@ -91,7 +105,7 @@ const sceneEditOperationExtractionTemplate = `
   # Instructions:
   - Analyze the user’s request and determine the sequence of scene changes needed.
   - Use only valid entity IDs from the world state. Do **not invent** or modify IDs.
-  - If a duplicate operation is required, use the original 'targetEntityId'; the system will assign the new ID.
+  - If a duplicate operation is required, use the original 'target'; the system will assign the new ID.
   - If an entity cannot be found, return a failed operation with "success": false and a clear reason.
   - Format all vector parameters as arrays (e.g., [x, y, z]).
   - Maintain the order of operations as implied by the user.
@@ -152,7 +166,7 @@ ${summary}
   export const hyperfyEditEntityAction: Action = {
     name: 'HYPERFY_EDIT_ENTITY',
     similes: ['EDIT_ENTITY_IN_WORLD', 'MODIFY_SCENE', 'BUILD_STRUCTURE'],
-    description: 'Enables the agent to interpret user instructions and perform structural edits within the Hyperfy world—such as duplicating entities, applying translations, rotations, scaling, or deletions—based on spatial and object references in the current scene context.',
+    description: `Performs scene edits in Hyperfy, including duplicating, moving, rotating, scaling, deleting, or importing entities. Use when the user asks to modify or add something in the 3D world.`,
     validate: async (runtime: IAgentRuntime): Promise<boolean> => {
       const service = runtime.getService<HyperfyService>(HyperfyService.serviceType);
       return !!service && service.isConnected() && !!service.getWorld()?.controls;
@@ -209,27 +223,35 @@ ${summary}
           continue;
         }
     
-        const { operation, targetEntityId, parameters, description } = op;
+        const { operation, target, parameters, description } = op;
         
         switch (operation) {
           case EditOperationType.TRANSLATE:
-            await buildManager.translate(targetEntityId, parameters?.translate);
+            await buildManager.translate(target, parameters?.position);
             break;
     
           case EditOperationType.ROTATE:
-            await buildManager.rotate(targetEntityId, parameters?.rotate);
+            await buildManager.rotate(target, parameters?.rotation);
             break;
     
           case EditOperationType.SCALE:
-            await buildManager.scale(targetEntityId, parameters?.scale);
+            await buildManager.scale(target, parameters?.scale);
             break;
     
           case EditOperationType.DUPLICATE:
-            await buildManager.duplicate(targetEntityId);
+            await buildManager.duplicate(target);
             break;
     
           case EditOperationType.DELETE:
-            await buildManager.delete(targetEntityId);
+            await buildManager.delete(target);
+            break;
+
+          case EditOperationType.IMPORT:
+            await buildManager.importEntity(
+              target,
+              parameters?.position,
+              parameters?.rotation
+            );
             break;
     
           default:

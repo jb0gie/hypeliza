@@ -24,8 +24,8 @@ export const character: Character = {
   plugins: [
     '@elizaos/plugin-sql',
     ...(process.env.ANTHROPIC_API_KEY ? ['@elizaos/plugin-anthropic'] : []),
-    ...(process.env.OPENAI_API_KEY ? ['@elizaos/plugin-openai'] : []),
     ...(process.env.GROQ_API_KEY ? ['@elizaos/plugin-groq'] : []),
+    ...(process.env.OPENAI_API_KEY ? ['@elizaos/plugin-openai'] : []),
   ],
   settings: {
     secrets: {},

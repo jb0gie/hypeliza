@@ -3,6 +3,7 @@ import { promises as fsPromises } from 'fs';
 import type { Action, IAgentRuntime, Memory, State } from '@elizaos/core';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
+import path from 'path';
 
 
 export async function hashFileBuffer(buffer: Buffer): Promise<string> {
@@ -60,6 +61,26 @@ export function getModuleDirectory(): string {
   return __dirname
 }
 
+const mimeTypes = {
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.png': 'image/png',
+  '.gif': 'image/gif',
+  '.bmp': 'image/bmp',
+  '.webp': 'image/webp',
+  '.hdr': 'image/vnd.radiance',
+  '.json': 'application/json',
+  '.glb': 'model/gltf-binary',
+  '.gltf': 'model/gltf+json',
+  '.vrm': 'model/gltf-binary',
+  '.hyp': 'application/octet-stream',
+};
+
+function getMimeTypeFromPath(filePath) {
+  const ext = path.extname(filePath).toLowerCase();
+  return mimeTypes[ext] || 'application/octet-stream';
+}
+
 export const resolveUrl = async (url, world) => {
   if (typeof url !== "string") {
     console.error(`Invalid URL type provided: ${typeof url}`);
@@ -79,16 +100,31 @@ export const resolveUrl = async (url, world) => {
   if (url.startsWith("http://") || url.startsWith("https://")) {
     return url;
   }
-  console.warn(
-    `[AgentLoader] Cannot resolve potentially relative URL without base: ${url}`
-  );
   
-  const moduleDirPath = getModuleDirectory();
-  url = `${moduleDirPath}/${url}`;
-  const fileBuffer = await fsPromises.readFile(url);
-  const base64 = fileBuffer.toString('base64');
-  url = `data:image/vnd.radiance;base64,${base64}`;
-  return url;
+  try {
+    const buffer = await fsPromises.readFile(url);
+    const mimeType = getMimeTypeFromPath(url);
+    return `data:${mimeType};base64,${buffer.toString('base64')}`;
+  } catch (err: any) {
+    console.warn(`File not found at "${url}", falling back to resolve relative to module directory.`);
+  }
+
+  // Fallback: resolve relative to module directory
+  const moduleDir = getModuleDirectory();
+  const fullPath = path.resolve(moduleDir, url);
+
+  try {
+    const buffer = await fsPromises.readFile(fullPath);
+    const mimeType = getMimeTypeFromPath(fullPath);
+    return `data:${mimeType};base64,${buffer.toString('base64')}`;
+  } catch (err: any) {
+    if (err.code === 'ENOENT') {
+      console.error(`[AgentLoader] File not found at either "${url}" or "${fullPath}"`);
+    } else {
+      console.error(`Error reading fallback file at "${fullPath}":`, err);
+    }
+    return null;
+  }
 }
 
 /**
