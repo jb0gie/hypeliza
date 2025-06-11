@@ -2,6 +2,8 @@ import { ChannelType, Entity, Content, HandlerCallback, IAgentRuntime, Memory, U
 import { HyperfyService } from "../service";
 import { agentActivityLock } from "./guards";
 import { hyperfyEventType } from "../events";
+import moment from 'moment'
+import { uuid } from '../hyperfy/src/core/utils';
 
 export class MessageManager {
   private runtime: IAgentRuntime;
@@ -165,9 +167,11 @@ export class MessageManager {
 
       world.chat.add(
         {
+          id: uuid(),
           body: text,
           fromId: agentPlayerId,
           from: agentPlayerName,
+          createdAt: moment().toISOString()
         },
         true
       )
