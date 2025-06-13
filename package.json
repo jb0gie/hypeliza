@@ -26,7 +26,7 @@
     "@elizaos/plugin-bootstrap": "^1.0.0-beta.76",
     "@elizaos/plugin-groq": "1.0.0-beta.41",
     "@elizaos/plugin-openai": "1.0.0-beta.41",
-    "@elizaos/plugin-openrouter": "^1.0.0-beta.55",
+    "@elizaos/plugin-openrouter": "1.0.0-beta.55",
     "@elizaos/plugin-sql": "1.0.0-beta.52",
     "@elizaos/plugin-telegram": "1.0.0-beta.41",
     "@livekit/rtc-node": "^0.13.13",
