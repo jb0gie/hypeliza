@@ -25,6 +25,7 @@ export const character: Character = {
     '@elizaos/plugin-sql',
     // ...(process.env.TWITTER_USERNAME ? ['@elizaos/plugin-twitter'] : []),
     // ...(process.env.DISCORD_API_TOKEN ? ['@elizaos/plugin-discord'] : []),
+    // ...(process.env.STUDIOLM_SERVER_URL ? ['@elizaos/plugin-local-ai'] : []),
     ...(process.env.OPENROUTER_API_KEY ? ['@elizaos/plugin-openrouter'] : []),
     ...(process.env.GROQ_API_KEY ? ['@elizaos/plugin-groq'] : []),
     ...(process.env.OPENAI_API_KEY ? ['@elizaos/plugin-openai'] : []),

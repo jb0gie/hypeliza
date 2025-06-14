@@ -28,7 +28,7 @@ import { hashFileBuffer, getModuleDirectory } from './utils'
 const moduleDirPath = getModuleDirectory();
 const LOCAL_AVATAR_PATH = `${moduleDirPath}/avatars/schwepe.vrm`;
 
-const HYPERFY_WS_URL = process.env.WS_URL || 'wss://live.255242621.xyz/ws'
+const HYPERFY_WS_URL = process.env.WS_URL || 'wss://255242621.xyz/ws'
 const HYPERFY_APPEARANCE_POLL_INTERVAL = 30000
 
 
