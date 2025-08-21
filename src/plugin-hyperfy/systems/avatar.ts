@@ -30,6 +30,7 @@ export class AgentAvatar extends Node {
   private _src: string | null = defaults.src
   private _emote: string | null = defaults.emote
   private _onLoad: (() => void) | null = defaults.onLoad
+  private _disableRateCheck: boolean = false
 
   public factory: AvatarFactory | null = null
   public hooks: any = null
@@ -68,6 +69,10 @@ export class AgentAvatar extends Node {
     if (this.factory) {
       this.instance = this.factory.create(this.matrixWorld, this.hooks, this)
       this.instance.setEmote(this._emote)
+      // Apply rate check disable if flag was set
+      if (this._disableRateCheck && typeof this.instance.disableRateCheck === 'function') {
+        this.instance.disableRateCheck()
+      }
       this.ctx.world?.setHot(this.instance, true)
       this._onLoad?.()
     }
@@ -138,6 +143,15 @@ export class AgentAvatar extends Node {
 
   getHeadToHeight(): number | null {
     return this.instance?.headToHeight ?? null
+  }
+
+  disableRateCheck(): void {
+    // Set flag to disable rate limiting for local player
+    if (this.instance && typeof this.instance.disableRateCheck === 'function') {
+      this.instance.disableRateCheck()
+    }
+    // Store flag for when instance is created
+    this._disableRateCheck = true
   }
 
   getBoneTransform(_boneName: string): THREE.Matrix4 {

@@ -12,7 +12,7 @@ import { getModuleDirectory } from '../utils.js';
 
 export class PuppeteerManager {
   private static instance: PuppeteerManager | null = null
-  
+
   private runtime: IAgentRuntime
   private browser: puppeteer.Browser
   private page: puppeteer.Page
@@ -67,8 +67,8 @@ export class PuppeteerManager {
         ]);
 
         await this.page.waitForFunction(() =>
-          window.THREE !== undefined && 
-          window.scene !== undefined && 
+          window.THREE !== undefined &&
+          window.scene !== undefined &&
           window.camera !== undefined
         )
       })()
@@ -88,20 +88,20 @@ export class PuppeteerManager {
     direction: 'front' | 'back' | 'left' | 'right'
   ): Promise<string> {
     await this.init();
-  
+
     const service = this.getService();
     const world = service.getWorld();
     const player = world.entities.player;
-  
+
     if (!player) {
       throw new Error('Player entity not yet available');
     }
 
     await world.controls.rotateTo(direction, 500);
-    world.controls.stopRotation();  
-  
+    world.controls.stopRotation();
+
     await this.rehydrateSceneAssets();
-  
+
     const playerData = {
       position: player.base.position.toArray() as [number, number, number],
       quaternion: [
@@ -115,26 +115,26 @@ export class PuppeteerManager {
     const base64 = await this.page.evaluate(async (playerData) => {
       return await window.snapshotFacingDirection(playerData);
     }, playerData);
-  
+
     const filePath = path.resolve(`scene_facing_${direction}.jpeg`);
     fs.writeFileSync(filePath, Buffer.from(base64, 'base64'));
-  
+
     return `data:image/jpeg;base64,${base64}`;
   }
-  
+
   public async snapshotViewToTarget(targetPosition: [number, number, number]): Promise<string> {
     await this.init();
-  
+
     const service = this.getService();
     const world = service.getWorld();
     const player = world.entities.player;
-  
+
     if (!player) {
       throw new Error('Player entity not yet available');
     }
-  
+
     await this.rehydrateSceneAssets();
-  
+
     const playerData = {
       position: player.base.position.toArray() as [number, number, number]
     };
@@ -142,44 +142,44 @@ export class PuppeteerManager {
     const base64 = await this.page.evaluate(async (playerData, targetPosition) => {
       return await window.snapshotViewToTarget(playerData, targetPosition);
     }, playerData, targetPosition);
-  
+
     const filePath = path.resolve(`scene_view_to_target.jpeg`);
     fs.writeFileSync(filePath, Buffer.from(base64, 'base64'));
-  
+
     return `data:image/jpeg;base64,${base64}`;
   }
-  
+
 
   public async snapshotEquirectangular(): Promise<string> {
     await this.init();
-  
+
     const service = this.getService();
     const world = service.getWorld();
     const player = world.entities.player;
-  
+
     if (!player) {
       throw new Error('Player entity not yet available');
     }
-  
+
     await this.rehydrateSceneAssets();
-  
+
     const playerData = {
       position: player.base.position.toArray(),
       quaternion: [player.base.quaternion.x, player.base.quaternion.y, player.base.quaternion.z, player.base.quaternion.w] as const
     };
-    
+
     const base64 = await this.page.evaluate(async (playerData) => {
       return await window.snapshotEquirectangular(playerData);
     }, playerData);
-  
+
     const buffer = Buffer.from(base64, 'base64');
     const filePath = path.resolve('scene_equirectangular.jpeg');
     fs.writeFileSync(filePath, buffer);
-  
+
     return `data:image/jpeg;base64,${base64}`;
   }
-  
-  
+
+
   async loadGlbBytes(url: string): Promise<number[]> {
     await this.init();
     const STRIP_SLOTS = this.STRIP_SLOTS;
@@ -224,32 +224,32 @@ export class PuppeteerManager {
 
   async loadVRMBytes(url: string): Promise<number[]> {
     await this.init();
-    
+
     return this.page.evaluate(async (url) => {
       const loader = window.VRMLoader;
       const gltf = await loader.loadAsync(url);
       const factory = window.createVRMFactory(gltf, (m) => m);
-      
+
       window.renderer.render(window.scene, window.camera);
 
       if (!window.avatarMap) window.avatarMap = new Map();
       window.avatarMap.set(url, factory); // Store a deep clone of the avatar
-  
+
       const exporter = new window.GLTFExporter();
       const buffer = await new Promise<ArrayBuffer>((done) =>
         exporter.parse(gltf.scene, done, { binary: true, embedImages: true })
       );
-  
+
       return [...new Uint8Array(buffer)];
     }, url);
   }
 
   async registerTexture(url: string, slot: string): Promise<string> {
     await this.init();
-  
+
     return this.page.evaluate(async (url, slot) => {
       if (!window.texturesMap) window.texturesMap = new Map();
-  
+
       const loader = window.TextureLoader;
       const texture = await new Promise<THREE.Texture>((resolve, reject) => {
         loader.load(
@@ -259,14 +259,14 @@ export class PuppeteerManager {
           err => reject(err)
         );
       });
-  
+
       const uuid = window.crypto.randomUUID();
       window.texturesMap.set(`${uuid}:${slot}`, texture);
-  
+
       return uuid;
     }, url, slot);
   }
-  
+
   public async loadEnvironmentHDR(url: string): Promise<void> {
     await this.init();
     const service = this.getService()
@@ -279,11 +279,11 @@ export class PuppeteerManager {
       const hdrTexture = await new Promise((resolve, reject) => {
         loader.load(url, resolve, undefined, reject);
       });
-  
+
       window.environment = hdrTexture;
       window.scene.environment = hdrTexture;
       window.scene.background = hdrTexture;
-  
+
       window.renderer.render(window.scene, window.camera);
     }, url);
   }
@@ -313,33 +313,33 @@ export class PuppeteerManager {
           };
         })
     );
-    
+
     const STRIP_SLOTS = this.STRIP_SLOTS;
     await this.page.evaluate(async (sceneJson, STRIP_SLOTS, players) => {
       const THREE = window.THREE;
       const loader = new window.THREE.ObjectLoader();
       const loadedScene = loader.parse(sceneJson);
-  
+
       // Rehydrate materials
       loadedScene.traverse(obj => {
         if (!obj.isMesh || !obj.material) return;
 
         const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
-  
+
         mats.forEach(mat => {
           const id = mat.userData.materialId;
           if (!id) return;
-  
+
           STRIP_SLOTS.forEach(slot => {
             const key = `${id}:${slot}`;
             const tex = window.texturesMap?.get(key);
             if (tex && tex.isTexture) mat[slot] = tex;
           });
-  
+
           mat.needsUpdate = true;
         });
       });
-  
+
       // Rehydrate player avatars
       if (window.activeVRMInstances) {
         for (const inst of window.activeVRMInstances) {
@@ -361,11 +361,11 @@ export class PuppeteerManager {
           camera: window.camera,
           scene: loadedScene,
           octree: null,
-          setupMaterial: () => {},
+          setupMaterial: () => { },
           loader: window.VRMLoader,
         }
         const instance = factory.create(new THREE.Matrix4(), vrmHooks, (m) => m);
-  
+
         const position = new THREE.Vector3(...player.position);
         const rotation = new THREE.Quaternion(...player.quaternion);
         const scale = new THREE.Vector3(...player.scale);

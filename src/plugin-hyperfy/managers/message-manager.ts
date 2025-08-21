@@ -7,7 +7,7 @@ import { uuid } from '../hyperfy/src/core/utils';
 
 export class MessageManager {
   private runtime: IAgentRuntime;
-  
+
   constructor(runtime: IAgentRuntime) {
     this.runtime = runtime;
     if (!this.runtime.character.templates) {
@@ -16,10 +16,20 @@ export class MessageManager {
   }
 
   async handleMessage(msg): Promise<void> {
-    // maybe a thinking emote here?
     await agentActivityLock.run(async () => {
       const service = this.getService();
       const world = service.getWorld();
+      
+      // Play thinking emote while processing (non-blocking)
+      // Using 'looking around' as thinking emote since 'thinking' doesn't exist
+      try {
+        const emoteManager = service.getEmoteManager();
+        if (emoteManager) {
+          emoteManager.playEmote('looking around');
+        }
+      } catch (e) {
+        // Ignore if emote doesn't exist
+      }
       const agentPlayerId = world.entities.player.data.id // Get agent's ID
       const senderName = msg.from || 'System'
       const messageBody = msg.body || ''
@@ -75,7 +85,7 @@ export class MessageManager {
         // Create a callback function to handle responses
         const callback: HandlerCallback = async (responseContent: Content): Promise<Memory[]> => {
           console.info(`[Hyperfy Chat Callback] Received response: ${JSON.stringify(responseContent)}`)
-          
+
           console.log(`[Hyperfy Chat Response] ${responseContent}`)
           const emote = responseContent.emote as string;
           // Send response back to Hyperfy
@@ -98,9 +108,9 @@ export class MessageManager {
             roomId: elizaRoomId,
             createdAt: Date.now(),
           };
-          
+
           await this.runtime.createMemory(callbackMemory, 'messages');
-        
+
           return [];
         };
 
@@ -132,14 +142,14 @@ export class MessageManager {
         console.info(`[Hyperfy Chat] Emitting MESSAGE_RECEIVED event for message: ${messageId}`)
         agentActivityLock.enter();
         await this.runtime.emitEvent(hyperfyEventType.MESSAGE_RECEIVED, {
-            runtime: this.runtime,
-            message: memory,
-            callback: callback,
-            source: 'hyperfy',
-            onComplete: () => {
-              agentActivityLock.exit();
-            }
-          },
+          runtime: this.runtime,
+          message: memory,
+          callback: callback,
+          source: 'hyperfy',
+          onComplete: () => {
+            agentActivityLock.exit();
+          }
+        },
         )
 
         console.info(`[Hyperfy Chat] Successfully emitted event for message: ${messageId}`)
@@ -189,7 +199,7 @@ export class MessageManager {
     messages: Memory[];
     entities: Entity[];
   }) {
-    
+
     const messageStrings = messages
       .filter((message: Memory) => message.entityId)
       .reverse()
@@ -197,7 +207,7 @@ export class MessageManager {
         const content = message.content as Content;
         const messageText = content.text || "";
         const messageActions = content.actions;
-  
+
         const entity = entities.find((e: Entity) => e.id === message.entityId) as any;
         const formattedName = (() => {
           try {
@@ -218,31 +228,31 @@ export class MessageManager {
         })();
 
         const formattedId = entity ? JSON.parse(entity.data).hyperfy.id : "";
-  
+
         const messageTime = new Date(message.createdAt);
         const hours = messageTime.getHours().toString().padStart(2, "0");
         const minutes = messageTime.getMinutes().toString().padStart(2, "0");
         const timeString = `${hours}:${minutes}`;
-  
+
         const timestamp = formatTimestamp(message.createdAt); // assuming this is already defined
-  
+
         const actionString =
           messageActions && messageActions.length > 0
             ? ` (${messageActions.join(", ")})`
             : "";
-  
+
         const textPart = messageText ? `: ${messageText}` : "";
-  
+
         const formattedLine = `- ${timeString} (${timestamp}) ${formattedName} [${formattedId}]${actionString}${textPart}`;
-  
+
         return formattedLine;
       })
       .filter(Boolean)
       .join("\n");
-  
+
     return messageStrings;
   }
-  
+
 
   async getRecentMessages(roomId: UUID, count = 20) {
     const [entitiesData, recentMessagesData] = await Promise.all([

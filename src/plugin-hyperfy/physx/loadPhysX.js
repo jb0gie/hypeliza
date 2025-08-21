@@ -10,12 +10,27 @@ let promise
 export function loadPhysX() {
   if (!promise) {
     promise = new Promise(async resolve => {
-      globalThis.PHYSX = await PhysXModule()
-      const version = PHYSX.PHYSICS_VERSION
-      const allocator = new PHYSX.PxDefaultAllocator()
-      const errorCb = new PHYSX.PxDefaultErrorCallback()
-      const foundation = PHYSX.CreateFoundation(version, allocator, errorCb)
-      resolve({ version, allocator, errorCb, foundation })
+      try {
+        console.log('[PhysX] Starting PhysX module load...');
+        // Disable threading to avoid resource exhaustion
+        globalThis.PHYSX = await PhysXModule({
+          locateFile: (path) => {
+            const fullPath = new URL(path, import.meta.url).pathname;
+            console.log('[PhysX] Loading file:', fullPath);
+            return fullPath;
+          }
+        })
+        console.log('[PhysX] Module loaded, creating foundation...');
+        const version = PHYSX.PHYSICS_VERSION
+        const allocator = new PHYSX.PxDefaultAllocator()
+        const errorCb = new PHYSX.PxDefaultErrorCallback()
+        const foundation = PHYSX.CreateFoundation(version, allocator, errorCb)
+        console.log('[PhysX] Foundation created successfully');
+        resolve({ version, allocator, errorCb, foundation })
+      } catch (error) {
+        console.error('[PhysX] Failed to load:', error);
+        throw error;
+      }
     })
   }
   return promise

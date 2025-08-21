@@ -7,11 +7,11 @@ import path from 'path';
 
 
 export async function hashFileBuffer(buffer: Buffer): Promise<string> {
-    const hashBuf = await crypto.subtle.digest('SHA-256', buffer)
-    const hash = Array.from(new Uint8Array(hashBuf))
-      .map(b => b.toString(16).padStart(2, '0'))
-      .join('')
-    return hash
+  const hashBuf = await crypto.subtle.digest('SHA-256', buffer)
+  const hash = Array.from(new Uint8Array(hashBuf))
+    .map(b => b.toString(16).padStart(2, '0'))
+    .join('')
+  return hash
 }
 
 export async function convertToAudioBuffer(speechResponse: any): Promise<Buffer> {
@@ -100,7 +100,7 @@ export const resolveUrl = async (url, world) => {
   if (url.startsWith("http://") || url.startsWith("https://")) {
     return url;
   }
-  
+
   try {
     const buffer = await fsPromises.readFile(url);
     const mimeType = getMimeTypeFromPath(url);

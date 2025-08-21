@@ -1,4 +1,35 @@
-import { ChannelType, Content, HandlerCallback, IAgentRuntime, Memory, ModelType, UUID, createUniqueUuid, getWavHeader, logger } from "@elizaos/core";
+import { ChannelType, Content, HandlerCallback, IAgentRuntime, Memory, ModelType, UUID, createUniqueUuid, logger } from "@elizaos/core";
+
+// Local implementation of getWavHeader
+function getWavHeader(sampleCount: number, sampleRate: number = 48000, channels: number = 1, bitsPerSample: number = 16): Buffer {
+  const byteRate = sampleRate * channels * (bitsPerSample / 8);
+  const blockAlign = channels * (bitsPerSample / 8);
+  const dataSize = sampleCount * channels * (bitsPerSample / 8);
+  const chunkSize = 36 + dataSize;
+
+  const header = Buffer.alloc(44);
+
+  // "RIFF" chunk descriptor
+  header.write('RIFF', 0);
+  header.writeUInt32LE(chunkSize, 4);
+  header.write('WAVE', 8);
+
+  // "fmt " sub-chunk
+  header.write('fmt ', 12);
+  header.writeUInt32LE(16, 16);
+  header.writeUInt16LE(1, 20);
+  header.writeUInt16LE(channels, 22);
+  header.writeUInt32LE(sampleRate, 24);
+  header.writeUInt32LE(byteRate, 28);
+  header.writeUInt16LE(blockAlign, 32);
+  header.writeUInt16LE(bitsPerSample, 34);
+
+  // "data" sub-chunk
+  header.write('data', 36);
+  header.writeUInt32LE(dataSize, 40);
+
+  return header;
+}
 import { HyperfyService } from "../service";
 import { convertToAudioBuffer } from "../utils";
 import { agentActivityLock } from "./guards";
@@ -35,12 +66,12 @@ export class VoiceManager {
       function isLoudEnough(pcmBuffer: Buffer, threshold = 1000): boolean {
         let sum = 0;
         const sampleCount = Math.floor(pcmBuffer.length / 2); // 16-bit samples
-      
+
         for (let i = 0; i < pcmBuffer.length; i += 2) {
           const sample = pcmBuffer.readInt16LE(i);
           sum += Math.abs(sample);
         }
-      
+
         const avgAmplitude = sum / sampleCount;
         return avgAmplitude > threshold;
       }
@@ -91,21 +122,21 @@ export class VoiceManager {
     }
 
     this.transcriptionTimeout = setTimeout(async () => {
-      await agentActivityLock.run(async () => {
-        this.processingVoice = true;
-        try {
-          await this.processTranscription(playerId);
+      // Don't use agentActivityLock.run for the entire transcription
+      // Only lock during the event emission in handleMessage
+      this.processingVoice = true;
+      try {
+        await this.processTranscription(playerId);
 
-          // Clean all users' previous buffers
-          this.userStates.forEach((state, _) => {
-            state.buffers.length = 0;
-            state.totalLength = 0;
-            state.transcriptionText = '';
-          });
-        } finally {
-          this.processingVoice = false;
-        }
-      })
+        // Clean all users' previous buffers
+        this.userStates.forEach((state, _) => {
+          state.buffers.length = 0;
+          state.totalLength = 0;
+          state.transcriptionText = '';
+        });
+      } finally {
+        this.processingVoice = false;
+      }
     }, DEBOUNCE_TRANSCRIPTION_THRESHOLD) as unknown as NodeJS.Timeout;
   }
 
@@ -265,7 +296,7 @@ export class VoiceManager {
 
     try {
       await world.livekit.publishAudioStream(audioBuffer);
-    } catch(error) {
+    } catch (error) {
       logger.error(error)
     } finally {
       this.processingVoice = false;
@@ -276,5 +307,5 @@ export class VoiceManager {
     return this.runtime.getService<HyperfyService>(HyperfyService.serviceType);
   }
 
-  
+
 }

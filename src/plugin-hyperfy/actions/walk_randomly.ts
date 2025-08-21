@@ -62,6 +62,12 @@ export const hyperfyWalkRandomlyAction: Action = {
               //  await callback({ text: "Was not wandering.", source: 'hyperfy' });
           }
       } else { // command === 'start'
+          // Check if already walking to prevent spam
+          if (controls.getIsWalkingRandomly()) {
+              // Already walking, don't restart
+              return; // Just return without callback to prevent spam
+          }
+          
           // Call startRandomWalk with calculated interval and distance
           controls.startRandomWalk(intervalMs, maxDistance);
 

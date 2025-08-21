@@ -216,14 +216,14 @@ export class AgentControls extends System {
 
 
   /**
-   * Starts navigating the agent towards the target X, Z coordinates.
+   * Starts navigating the agent towards the target X, Y, Z coordinates.
    */
-  public async goto(x: number, z: number): Promise<void> {
+  public async goto(x: number, z: number, y: number = 0): Promise<void> {
     this.stopAllActions("starting new navigation");
   
     const navigationToken = new ControlsToken();
     this._currentWalkToken = navigationToken;
-    this._navigationTarget = new THREE.Vector3(x, 0, z);
+    this._navigationTarget = new THREE.Vector3(x, y, z); // Now includes Y coordinate
     this._isNavigating = true;
   
     await this._navigateTowards(() => this._navigationTarget, NAVIGATION_STOP_DISTANCE, navigationToken);
@@ -237,6 +237,13 @@ export class AgentControls extends System {
     allowSprint: boolean = true
   ): Promise<void> {
     const player = this.world.entities.player;
+    
+    // Check if player has capsule physics
+    if (!player.capsule) {
+      logger.error("[Controls] Player capsule not found! Physics may not be initialized.");
+      return;
+    }
+    
     const tickDelay = (ms: number) => new Promise(res => setTimeout(res, ms));
   
     let previousPosition = player.base.position.clone();
@@ -258,9 +265,22 @@ export class AgentControls extends System {
       }
   
       const playerPos = v1.copy(player.base.position);
-      const distance = playerPos.clone().setY(0).distanceTo(targetPos.clone().setY(0));
+      const horizontalDistance = playerPos.clone().setY(0).distanceTo(targetPos.clone().setY(0));
+      const verticalDistance = Math.abs(targetPos.y - playerPos.y);
+      const totalDistance = playerPos.distanceTo(targetPos);
   
-      if (distance <= stopDistance) {
+      // If target is too high/low (more than 3 meters), teleport immediately
+      if (verticalDistance > 3.0 && horizontalDistance <= stopDistance * 2) {
+        logger.info(`[Controls] Target is ${verticalDistance.toFixed(1)}m vertically away. Teleporting.`);
+        player.teleport({
+          position: targetPos,
+          rotationY: Math.atan2(-(targetPos.x - playerPos.x), -(targetPos.z - playerPos.z)),
+        });
+        this.stopNavigation("teleported due to height difference");
+        break;
+      }
+  
+      if (horizontalDistance <= stopDistance) {
         logger.info(`[Controls] Reached target within ${stopDistance}m.`);
         this.stopNavigation("target reached");
         break;
@@ -270,6 +290,11 @@ export class AgentControls extends System {
       const progressDistance = playerPos.distanceTo(previousPosition);
       if (progressDistance < STUCK_THRESHOLD) {
         noProgressTicks++;
+        // Add debug logging
+        if (noProgressTicks === 1) {
+          logger.debug(`[Controls] No movement detected. Player pos: ${playerPos.x.toFixed(2)}, ${playerPos.y.toFixed(2)}, ${playerPos.z.toFixed(2)}`);
+          logger.debug(`[Controls] Keys: w=${this.keyW?.down}, shift=${this.shiftLeft?.down}`);
+        }
       } else {
         noProgressTicks = 0;
       }
@@ -322,7 +347,7 @@ export class AgentControls extends System {
       this.setKey('keyS', false);
       this.setKey('keyA', false);
       this.setKey('keyD', false);
-      this.setKey('shiftLeft', allowSprint && distance > SPRINT_DISTANCE_THRESHOLD);
+      this.setKey('shiftLeft', allowSprint && horizontalDistance > SPRINT_DISTANCE_THRESHOLD);
   
       await tickDelay(CONTROLS_TICK_INTERVAL);
     }
@@ -512,8 +537,56 @@ export class AgentControls extends System {
     };
   }
 
-  // Dummy methods
-  bind(options: any) { return this; }
+  // Control binding methods required by PlayerLocal and other entities
+  bind(options: any = {}) {
+    // Return a control object that references the ACTUAL button states from AgentControls
+    const control = {
+      options,
+      entries: {},
+      actions: null,
+      camera: this.camera, // Include the camera object
+      screen: { width: 1920, height: 1080 }, // Mock screen dimensions
+      pointer: { locked: false, delta: { x: 0, y: 0 } }, // Mock pointer state with delta
+      scrollDelta: { value: 0 }, // Mock scroll delta
+      // Reference the ACTUAL button states from this AgentControls instance
+      space: this.space,
+      keyW: this.keyW,
+      keyA: this.keyA,
+      keyS: this.keyS,
+      keyD: this.keyD,
+      shiftLeft: this.shiftLeft,
+      shiftRight: this.shiftRight,
+      controlLeft: this.controlLeft,
+      keyC: this.keyC,
+      keyF: this.keyF,
+      keyE: this.keyE,
+      keyX: this.keyX, // Already created in constructo
+      arrowUp: this.arrowUp,
+      arrowDown: this.arrowDown,
+      arrowLeft: this.arrowLeft,
+      arrowRight: this.arrowRight,
+      // Add touch and XR controls
+      touchA: this.touchA,
+      touchB: this.touchB,
+      xrLeftStick: this.xrLeftStick,
+      xrRightStick: this.xrRightStick,
+      xrLeftBtn1: this.xrLeftBtn1,
+      xrLeftBtn2: this.xrLeftBtn2,
+      xrRightBtn1: this.xrRightBtn1,
+      xrRightBtn2: this.xrRightBtn2,
+      hideReticle: (value = true) => {
+        // No-op for agent controls
+      },
+      setActions: (value: any) => {
+        control.actions = value;
+      },
+      release: () => {
+        // No-op for agent controls
+      }
+    };
+    return control;
+  }
+  
   release() { }
   setActions() { }
 }

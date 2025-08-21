@@ -168,6 +168,31 @@ export const messageReceivedHandler = async ({
             // Map parsed XML to Content type, handling potential missing fields
             if (parsedXml) {
               let actions = parsedXml.actions || ['IGNORE'];
+              
+              // Check if message contains navigation/follow commands
+              const messageText = message.content?.text?.toLowerCase() || '';
+              if (messageText.includes('follow') || messageText.includes('come here') || messageText.includes('come over')) {
+                // Add HYPERFY_GOTO_ENTITY action for follow commands
+                if (!actions.includes('HYPERFY_GOTO_ENTITY')) {
+                  actions.push('HYPERFY_GOTO_ENTITY');
+                }
+              }
+              
+              // Check if message contains jump commands
+              if (messageText.includes('jump') || messageText.includes('hop') || messageText.includes('leap')) {
+                // Add HYPERFY_JUMP action for jump commands
+                if (!actions.includes('HYPERFY_JUMP')) {
+                  actions.push('HYPERFY_JUMP');
+                }
+              }
+              
+              // Check if message contains use/grab/pickup commands
+              if (messageText.includes('use') || messageText.includes('grab') || messageText.includes('pick up') || messageText.includes('interact')) {
+                // Add HYPERFY_USE_ITEM action for interaction commands
+                if (!actions.includes('HYPERFY_USE_ITEM')) {
+                  actions.push('HYPERFY_USE_ITEM');
+                }
+              }
 
               // Reorder actions so 'REPLY' always comes first if present
               const replyIndex = actions.findIndex(a => a.toUpperCase() === 'REPLY');

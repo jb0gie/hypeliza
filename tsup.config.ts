@@ -7,7 +7,7 @@ export default defineConfig({
   platform: 'node', // Revert platform back to node
   sourcemap: true,
   clean: true,
-  format: ['esm'], // Ensure you're targeting CommonJS
+  format: ['esm', 'cjs'], // Support both ESM and CommonJS
   dts: false, // Skip DTS generation to avoid external import issues // Ensure you're targeting CommonJS
   external: [
     'dotenv',

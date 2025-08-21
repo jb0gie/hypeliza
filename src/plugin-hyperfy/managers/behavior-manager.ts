@@ -4,14 +4,14 @@ import { autoTemplate } from "../templates";
 import { agentActivityLock } from "./guards";
 import { getHyperfyActions, formatActions } from "../utils";
 
-const TIME_INTERVAL_MIN = 15000; // 15 seconds
-const TIME_INTERVAL_MAX = 30000; // 30 seconds
+const TIME_INTERVAL_MIN = 10000; // 10 seconds (reduced from 15)
+const TIME_INTERVAL_MAX = 20000; // 20 seconds (reduced from 30)
 
 
 export class BehaviorManager {
   private isRunning: boolean = false;
   private runtime: IAgentRuntime;
-  
+
   constructor(runtime: IAgentRuntime) {
     this.runtime = runtime;
   }
@@ -97,7 +97,7 @@ export class BehaviorManager {
     }
 
     const _currentWorldId = service.currentWorldId;
-    
+
     const elizaRoomId = createUniqueUuid(this.runtime, _currentWorldId || 'hyperfy-unknown-world')
     const entityId = createUniqueUuid(this.runtime, this.runtime.agentId);
 
@@ -115,17 +115,18 @@ export class BehaviorManager {
     const state = await this.runtime.composeState(newMessage);
 
     const actionsData = await getHyperfyActions(
-      this.runtime, 
-      newMessage, 
+      this.runtime,
+      newMessage,
       state, [
-        'HYPERFY_GOTO_ENTITY',
-        'HYPERFY_WALK_RANDOMLY',
-        'HYPERFY_USE_ITEM',
-        'HYPERFY_UNUSE_ITEM',
-        'HYPERFY_AMBIENT_SPEECH',
-        'REPLY',
-        'IGNORE',
-      ]
+      'HYPERFY_GOTO_ENTITY',
+      'HYPERFY_WALK_RANDOMLY',
+      'HYPERFY_USE_ITEM',
+      'HYPERFY_UNUSE_ITEM',
+      'HYPERFY_JUMP',
+      'HYPERFY_AMBIENT_SPEECH',
+      'REPLY',
+      'IGNORE',
+    ]
     );
 
     const actionsText = actionsData.length > 0 ? formatActions(actionsData) : '';
@@ -140,6 +141,12 @@ export class BehaviorManager {
     const parsedXml = parseKeyValueXml(response);
 
     console.log('****** response\n', parsedXml)
+    
+    // Skip if parsing failed
+    if (!parsedXml) {
+      logger.warn("[BehaviorManager] Failed to parse response, skipping behavior");
+      return;
+    }
 
     const responseMemory = {
       content: {
@@ -194,10 +201,10 @@ export class BehaviorManager {
         const messageManager = service.getMessageManager();
         messageManager.sendMessage(responseContent.text)
       }
-      
+
       return [];
     };
-    
+
     await this.runtime.processActions(
       newMessage,
       [responseMemory],

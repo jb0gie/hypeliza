@@ -11,6 +11,7 @@ import {
 } from '@elizaos/core';
 
 import { HyperfyService } from '../service';
+import { ScreenshotHelper } from '../utils/screenshot';
 export enum SnapshotType {
   LOOK_AROUND     = 'LOOK_AROUND',
   LOOK_DIRECTION  = 'LOOK_DIRECTION',
@@ -170,12 +171,14 @@ export const hyperfyScenePerceptionAction: Action = {
   ) => {
     const service = runtime.getService<HyperfyService>(HyperfyService.serviceType);
     const world = service?.getWorld();
-    const puppeteerManager = service?.getPuppeteerManager();
+    // Puppeteer disabled due to WSL2 resource constraints - using text-based perception
+    // const puppeteerManager = service?.getPuppeteerManager();
+    const puppeteerManager = null;
     const controls = world.controls;
 
     controls.stopAllActions();
 
-    if (!service || !world || !puppeteerManager) {
+    if (!service || !world) {
       logger.error('Hyperfy service/world unavailable.');
       await callback({ text: 'Unable to observe environment. Hyperfy world not available.' });
       return;
@@ -208,43 +211,149 @@ export const hyperfyScenePerceptionAction: Action = {
 
     
     /* Capture snapshot */
-    let imgBase64: string;
+    let imgBase64: string = '';
+    
+    // Try lightweight screenshot first
+    const screenshotHelper = new ScreenshotHelper(world);
+    
     try {
       switch (snapshotType) {
         case SnapshotType.LOOK_AROUND:
-          imgBase64 = await puppeteerManager.snapshotEquirectangular();
+          imgBase64 = await screenshotHelper.capturePanorama() || '';
           break;
         case SnapshotType.LOOK_DIRECTION:
-          if (!parameter || !['front', 'back', 'left', 'right'].includes(parameter)) throw new Error('Bad direction');
-          imgBase64 = await puppeteerManager.snapshotFacingDirection(parameter);
+          // For direction, just capture current view (simplified)
+          imgBase64 = await screenshotHelper.captureScreenshot() || '';
           break;
         case SnapshotType.LOOK_AT_ENTITY:
           if (!parameter) throw new Error('Missing entityId');
-          const ent = world.entities.items.get(parameter);
-          const pos = ent?.base?.position || ent?.root?.position;
-          if (!pos) throw new Error('No position');
           await world.controls.followEntity(parameter);
-          imgBase64 = await puppeteerManager.snapshotViewToTarget([pos.x, pos.y, pos.z]);
+          imgBase64 = await screenshotHelper.captureEntityView(parameter) || '';
           break;
         default:
           throw new Error('Unknown snapshotType');
       }
+      
+      if (imgBase64) {
+        logger.info('[Perception] Screenshot captured successfully using lightweight method');
+      }
     } catch (err) {
-      logger.error('Snapshot failed:', err);
-      await callback({ thought: 'Snapshot failed.', metadata: { error: 'snapshot_failure', snapshotType } });
-      return;
+      logger.error('[Perception] Screenshot failed:', err);
+      // Continue without screenshot - will use text-based perception
+    } finally {
+      screenshotHelper.dispose();
+    }
+    
+    if (!imgBase64 && puppeteerManager) {
+      // Fallback to Puppeteer if available and lightweight failed
+      logger.info('[Perception] Attempting Puppeteer fallback');
+      try {
+        switch (snapshotType) {
+          case SnapshotType.LOOK_AROUND:
+            imgBase64 = await puppeteerManager.snapshotEquirectangular();
+            break;
+          case SnapshotType.LOOK_DIRECTION:
+            if (!parameter || !['front', 'back', 'left', 'right'].includes(parameter)) throw new Error('Bad direction');
+            imgBase64 = await puppeteerManager.snapshotFacingDirection(parameter);
+            break;
+          case SnapshotType.LOOK_AT_ENTITY:
+            if (!parameter) throw new Error('Missing entityId');
+            const ent = world.entities.items.get(parameter);
+            const pos = ent?.base?.position || ent?.root?.position;
+            if (!pos) throw new Error('No position');
+            imgBase64 = await puppeteerManager.snapshotViewToTarget([pos.x, pos.y, pos.z]);
+            break;
+        }
+      } catch (err) {
+        logger.error('[Perception] Puppeteer also failed:', err);
+      }
+    }
+    
+    if (!imgBase64) {
+      logger.warn('[Perception] No screenshot available - using text-based perception');
     }
 
     /* IMAGE_DESCRIPTION – detailed scene analysis */
-    const imgDescPrompt = composePromptFromState({ state, template: detailedImageDescriptionTemplate });
     let sceneDescription: string;
-    try {
-      const res = await runtime.useModel(ModelType.IMAGE_DESCRIPTION, { imageUrl: imgBase64, prompt: imgDescPrompt });
-      sceneDescription = typeof res === 'string' ? res : res.description;
-    } catch (err) {
-      logger.error('IMAGE_DESCRIPTION failed:', err);
-      await callback({ thought: 'Cannot understand the scene.', metadata: { error: 'vision_failure' } });
-      return;
+    
+    if (imgBase64 && imgBase64.startsWith('data:image')) {
+      // We have a valid screenshot, use image description
+      const imgDescPrompt = composePromptFromState({ state, template: detailedImageDescriptionTemplate });
+      try {
+        const res = await runtime.useModel(ModelType.IMAGE_DESCRIPTION, { imageUrl: imgBase64, prompt: imgDescPrompt });
+        sceneDescription = typeof res === 'string' ? res : res.description;
+      } catch (err) {
+        logger.error('IMAGE_DESCRIPTION failed:', err);
+        // Fall back to text-based perception
+        sceneDescription = '';
+      }
+    }
+    
+    // If no image or image description failed, use text-based perception
+    if (!sceneDescription) {
+      logger.info('[Perception] Using text-based perception');
+      const entities = world?.entities?.items;
+      const agentPos = world?.entities?.player?.base?.position;
+      const nearbyEntities = [];
+      
+      if (entities && agentPos) {
+        for (const [id, entity] of entities.entries()) {
+          if (id === world?.entities?.player?.data?.id) continue;
+          const pos = entity?.base?.position || entity?.root?.position;
+          if (pos) {
+            const distance = Math.sqrt(
+              Math.pow(pos.x - agentPos.x, 2) + 
+              Math.pow(pos.y - agentPos.y, 2) + 
+              Math.pow(pos.z - agentPos.z, 2)
+            );
+            if (distance < 30) {
+              const name = entity?.data?.name || entity?.blueprint?.name || 'Unknown';
+              const type = entity?.data?.type || 'object';
+              nearbyEntities.push({
+                name,
+                type,
+                distance: distance.toFixed(1),
+                position: `[${pos.x.toFixed(1)}, ${pos.y.toFixed(1)}, ${pos.z.toFixed(1)}]`
+              });
+            }
+          }
+        }
+        
+        // Sort by distance
+        nearbyEntities.sort((a, b) => parseFloat(a.distance) - parseFloat(b.distance));
+      }
+      
+      // Build text-based scene description
+      sceneDescription = `Observing the Hyperfy virtual world. `;
+      
+      if (snapshotType === SnapshotType.LOOK_AT_ENTITY && parameter) {
+        const targetEntity = entities?.get(parameter);
+        if (targetEntity) {
+          const targetName = targetEntity?.data?.name || 'Unknown';
+          const targetPos = targetEntity?.base?.position || targetEntity?.root?.position;
+          if (targetPos && agentPos) {
+            const dist = Math.sqrt(
+              Math.pow(targetPos.x - agentPos.x, 2) + 
+              Math.pow(targetPos.y - agentPos.y, 2) + 
+              Math.pow(targetPos.z - agentPos.z, 2)
+            );
+            sceneDescription += `Looking at ${targetName}, approximately ${dist.toFixed(1)}m away. `;
+          }
+        }
+      }
+      
+      if (nearbyEntities.length > 0) {
+        sceneDescription += `I can detect ${nearbyEntities.length} entities nearby: `;
+        sceneDescription += nearbyEntities
+          .slice(0, 10)
+          .map(e => `${e.name} (${e.type}) at ${e.distance}m`)
+          .join(', ');
+        sceneDescription += '. ';
+      } else {
+        sceneDescription += 'No other entities detected in immediate vicinity. ';
+      }
+      
+      sceneDescription += 'This is a real-time 3D environment.';
     }
 
     //  Add dynamic header for scene perception

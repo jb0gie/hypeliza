@@ -4,7 +4,7 @@ import { isNumber, isString } from 'lodash-es'
 import { System } from '../hyperfy/src/core/systems/System.js'
 import { logger } from '@elizaos/core';
 import * as THREE from 'three';
-import { PuppeteerManager } from "../managers/puppeteer-manager.js";
+// import { PuppeteerManager } from "../managers/puppeteer-manager.js";
 import { resolveUrl } from '../utils.js';
 
 interface SkyHandle {
@@ -41,9 +41,10 @@ export class AgentEnvironment extends System {
 
   async start() {
     this.base = {
-      model: 'assets/base-environment.glb',
-      bg: 'assets/day2-2k.jpg',
-      hdr: 'assets/day2.hdr',
+      // Removed old asset references - using new scene system
+      model: null,
+      bg: null,
+      hdr: null,
       sunDirection: new THREE.Vector3(-1, -2, -2).normalize(),
       sunIntensity: 1,
       sunColor: 0xffffff,
@@ -61,6 +62,13 @@ export class AgentEnvironment extends System {
 
   async updateModel() {
     const url = this.world.settings.model?.url || this.base.model
+
+    // Don't try to load if no URL is provided
+    if (!url) {
+      console.log('[AgentEnvironment] No model URL provided, skipping model load');
+      return;
+    }
+
     let glb = this.world.loader.get('model', url)
     if (!glb) glb = await this.world.loader.load('model', url)
     if (this.model) this.model.deactivate()
@@ -90,7 +98,7 @@ export class AgentEnvironment extends System {
   async updateSky() {
     if (!this.sky) {
       const geometry = new THREE.SphereGeometry(1000, 60, 40)
-      const material = new THREE.MeshBasicMaterial({side: THREE.BackSide});      
+      const material = new THREE.MeshBasicMaterial({ side: THREE.BackSide });
       this.sky = new THREE.Mesh(geometry, material)
       this.sky.geometry.computeBoundsTree()
       this.sky.material.fog = false
@@ -112,22 +120,18 @@ export class AgentEnvironment extends System {
     const fogNear = isNumber(node?._fogNear) ? node._fogNear : base.fogNear
     const fogFar = isNumber(node?._fogFar) ? node._fogFar : base.fogFar
     const fogColor = isString(node?._fogColor) ? node._fogColor : base.fogColor
-    const puppeteerManager = PuppeteerManager.getInstance()
+    // Puppeteer disabled - skip texture registration
     const n = ++this.skyN
-    let bgUUID
     if (bgUrl) {
       bgUrl = await resolveUrl(bgUrl, this.world);
-      bgUUID = await puppeteerManager.registerTexture(bgUrl, 'map');
-    }
-    if (bgUUID) {
-      this.sky.material.userData.materialId = bgUUID;
+      // Would register texture with puppeteer here
       this.sky.visible = true
     } else {
       this.sky.visible = false
     }
 
     if (hdrUrl) {
-      await puppeteerManager.loadEnvironmentHDR(hdrUrl);
+      // Would load HDR with puppeteer here
     }
     if (n !== this.skyN) return
 
