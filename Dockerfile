@@ -11,8 +11,8 @@ COPY package*.json ./
 COPY tsconfig.json ./
 COPY tsup.config.ts ./
 
-# Install dependencies
-RUN npm ci
+# Install dependencies (using legacy-peer-deps due to dependency conflicts)
+RUN npm ci --legacy-peer-deps
 
 # Copy source code
 COPY src ./src
@@ -43,8 +43,8 @@ WORKDIR /app
 # Copy package files
 COPY package*.json ./
 
-# Install production dependencies only
-RUN npm ci --only=production
+# Install production dependencies only (using legacy-peer-deps)
+RUN npm ci --only=production --legacy-peer-deps
 
 # Copy built application from builder stage
 COPY --from=builder /app/dist ./dist
