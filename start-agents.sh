@@ -10,11 +10,11 @@ start_agent() {
     # Export port for this agent
     export PORT=$port
     
-    # Start the agent with the appropriate flag
+    # Start the agent with the appropriate flag using bun
     if [ "$agent_name" = "schwepe" ]; then
-        node dist/index.js --schwepe &
+        bun run dist/index.js --schwepe &
     elif [ "$agent_name" = "schiz0tr0n" ]; then
-        node dist/index.js --schiz0tr0n &
+        bun run dist/index.js --schiz0tr0n &
     fi
     
     echo "$agent_name agent started with PID $!"
