@@ -1,23 +1,33 @@
-# Use Node.js 20
-FROM node:20-alpine
+# Use Node.js 20 (Debian-based, not Alpine)
+FROM node:20
 
-# Install dependencies for building native modules and Chromium
-RUN apk add --no-cache \
-    python3 \
-    make \
-    g++ \
-    git \
+# Install dependencies for Chromium
+RUN apt-get update && apt-get install -y \
     chromium \
-    nss \
-    freetype \
-    freetype-dev \
-    harfbuzz \
+    chromium-driver \
+    wget \
+    gnupg \
     ca-certificates \
-    ttf-freefont
+    fonts-liberation \
+    libasound2 \
+    libatk-bridge2.0-0 \
+    libatk1.0-0 \
+    libcups2 \
+    libdbus-1-3 \
+    libdrm2 \
+    libgbm1 \
+    libgtk-3-0 \
+    libnspr4 \
+    libnss3 \
+    libxcomposite1 \
+    libxdamage1 \
+    libxrandr2 \
+    xdg-utils \
+    && rm -rf /var/lib/apt/lists/*
 
 # Set Puppeteer to use installed Chromium
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true \
-    PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
+    PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
 
 WORKDIR /app
 
@@ -31,8 +41,8 @@ RUN npm install --legacy-peer-deps
 RUN npm run build
 
 # Create non-root user
-RUN addgroup -g 1001 -S nodejs && \
-    adduser -S nodejs -u 1001
+RUN groupadd -g 1001 nodejs && \
+    useradd -r -u 1001 -g nodejs nodejs
 
 # Create necessary directories and set permissions
 RUN mkdir -p /app/data /app/logs && \
