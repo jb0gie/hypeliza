@@ -9,8 +9,8 @@ export const character: Character = {
 	],
 	settings: {
 		secrets: {
-			TELEGRAM_BOT_TOKEN: process.env.SCHIZ0TR0N_TELEGRAM_BOT_TOKEN,
 			OPENROUTER_API_KEY: process.env.SCHIZ0TR0N_OPENROUTER_API_KEY,
+			TELEGRAM_BOT_TOKEN: process.env.SCHIZ0TR0N_TELEGRAM_BOT_TOKEN,
 		},
 		voice: {
 			model: 'en_US-male-medium'
