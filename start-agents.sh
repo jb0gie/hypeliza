@@ -12,9 +12,9 @@ start_agent() {
     
     # Start the agent with the appropriate flag using bun
     if [ "$agent_name" = "schwepe" ]; then
-        bun run dist/index.js --schwepe &
+        bun dist/index.js --schwepe &
     elif [ "$agent_name" = "schiz0tr0n" ]; then
-        bun run dist/index.js --schiz0tr0n &
+        bun dist/index.js --schiz0tr0n &
     fi
     
     echo "$agent_name agent started with PID $!"
