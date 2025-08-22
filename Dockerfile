@@ -1,80 +1,48 @@
-# Multi-stage build for optimized image size
-FROM node:20-alpine AS builder
-
-# Install dependencies for native modules
-RUN apk add --no-cache python3 make g++ git
-
-WORKDIR /app
-
-# Copy package files and npm config
-COPY package*.json ./
-COPY .npmrc ./
-COPY tsconfig.json ./
-COPY tsup.config.ts ./
-
-# Clean install dependencies
-RUN npm ci --legacy-peer-deps || \
-    (echo "npm ci failed, trying npm install" && \
-     rm -rf node_modules package-lock.json && \
-     npm install --legacy-peer-deps)
-
-# Copy source code
-COPY src ./src
-
-# Build the application
-RUN npm run build
-
-# Production stage
+# Use Node.js 20
 FROM node:20-alpine
 
-# Install runtime dependencies
+# Install dependencies for building native modules and Chromium
 RUN apk add --no-cache \
+    python3 \
+    make \
+    g++ \
+    git \
     chromium \
     nss \
     freetype \
     freetype-dev \
     harfbuzz \
     ca-certificates \
-    ttf-freefont \
-    git
+    ttf-freefont
 
-# Set Puppeteer environment variables
+# Set Puppeteer to use installed Chromium
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true \
     PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
 
 WORKDIR /app
 
-# Copy package files and npm config
-COPY package*.json ./
-COPY .npmrc ./
+# Copy all files
+COPY . .
 
-# Install production dependencies
-RUN npm ci --only=production --legacy-peer-deps || \
-    (echo "npm ci failed, trying npm install" && \
-     rm -rf node_modules package-lock.json && \
-     npm install --production --legacy-peer-deps)
+# Install dependencies with legacy peer deps
+RUN npm install --legacy-peer-deps
 
-# Copy built application from builder stage
-COPY --from=builder /app/dist ./dist
-
-# Copy startup script
-COPY start-agents.sh ./
-
-# Make startup script executable
-RUN chmod +x start-agents.sh
+# Build the application
+RUN npm run build
 
 # Create non-root user
 RUN addgroup -g 1001 -S nodejs && \
     adduser -S nodejs -u 1001
 
-# Create necessary directories
+# Create necessary directories and set permissions
 RUN mkdir -p /app/data /app/logs && \
-    chown -R nodejs:nodejs /app
+    chown -R nodejs:nodejs /app && \
+    chmod +x start-agents.sh
 
 # Switch to non-root user
 USER nodejs
 
-# Expose the default ports
+# Expose ports
 EXPOSE 3000 3001
 
 # Start the application
