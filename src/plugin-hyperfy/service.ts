@@ -17,7 +17,6 @@ import { AgentLoader } from './systems/loader'
 import { AgentLiveKit } from './systems/liveKit.js'
 import { AgentActions } from './systems/actions.js'
 import { loadPhysX } from './physx/loadPhysX.js'
-import { extendThreeForPhysics } from './physics-extensions'
 import { BehaviorManager } from "./managers/behavior-manager.js"
 import { EmoteManager } from './managers//emote-manager.js'
 import { MessageManager } from './managers//message-manager.js'
@@ -74,12 +73,25 @@ export class HyperfyService extends Service {
 		console.info('*** Starting Hyperfy service ***')
 		const service = new HyperfyService(runtime)
 		console.info(`Attempting automatic connection to default Hyperfy URL: ${HYPERFY_WS_URL}`)
-		// Use an empty UUID for local world connection
-		const defaultWorldId = '00000000-0000-0000-0000-000000000000' as UUID
+		
+		// Extract world ID from the URL or use default for local connections
+		let worldId: UUID;
+		if (HYPERFY_WS_URL.includes('localhost') || HYPERFY_WS_URL.includes('127.0.0.1')) {
+			// Local development - use default UUID
+			worldId = '00000000-0000-0000-0000-000000000000' as UUID;
+		} else {
+			// Remote world - extract from URL or generate unique one
+			// For remote worlds, we don't actually need a specific world ID
+			// The server will assign us to the correct world based on the WS URL
+			worldId = createUniqueUuid(runtime.agentId, Date.now().toString()) as UUID;
+		}
+		
+		// Try to load existing auth token or leave undefined
+		// For remote worlds, you typically need a valid auth token from that specific world
 		const authToken: string | undefined = undefined
 
 		service
-			.connect({ wsUrl: HYPERFY_WS_URL, worldId: defaultWorldId, authToken })
+			.connect({ wsUrl: HYPERFY_WS_URL, worldId, authToken })
 			.then(() => console.info(`Automatic Hyperfy connection initiated.`))
 			.catch(err => console.error(`Automatic Hyperfy connection failed: ${err.message}`))
 
@@ -106,9 +118,7 @@ export class HyperfyService extends Service {
 		this.nameSet = false
 
 		try {
-			// Extend THREE objects with PhysX methods before creating world
-			extendThreeForPhysics()
-			
+			// Create world first
 			const world = createNodeClientWorld()
 			this.world = world
 
@@ -160,7 +170,7 @@ export class HyperfyService extends Service {
 
 			// HACK: Overwriting `chat.add` to prevent crashes caused by the original implementation.
 			// This ensures safe handling of chat messages and avoids unexpected errors from undefined fields.
-			(world as any).chat.add = (msg, broadcast) => {
+			(world as any).chat.add = (msg: any, broadcast: any) => {
 				const chat = (world as any).chat;
 				const MAX_MSGS = 50;
 
@@ -197,14 +207,37 @@ export class HyperfyService extends Service {
 				viewport: mockElement,
 				ui: mockElement,
 				initialAuthToken: config.authToken,
+				name: this.runtime.character?.name || 'schwepe',
+				avatar: undefined,
 				loadPhysX
 			}
 
 			if (typeof this.world.init !== 'function') {
 				throw new Error('world.init is not a function')
 			}
-			await this.world.init(hyperfyConfig)
-			console.info('Hyperfy world initialized.')
+			
+			// Add timeout for world initialization to prevent hanging on complex worlds
+			const initTimeout = new Promise((_, reject) => 
+				setTimeout(() => reject(new Error('World initialization timed out after 30 seconds')), 30000)
+			);
+			
+			try {
+				await Promise.race([
+					this.world.init(hyperfyConfig),
+					initTimeout
+				]);
+				console.info('Hyperfy world initialized.')
+			} catch (error: any) {
+				if (error.message.includes('timed out')) {
+					console.warn('World initialization timed out - proceeding with partial initialization');
+				} else {
+					throw error;
+				}
+			}
+			
+			// Physics extensions are handled by the Physics system in hyperfy core
+			// Don't call extendThreeForPhysics here as it conflicts with extendThreePhysX
+			console.info('World physics initialized.')
 			
 			// Give the world time to stabilize after initialization (reduced from 2000ms)
 			await new Promise(resolve => setTimeout(resolve, 500));
@@ -420,40 +453,74 @@ export class HyperfyService extends Service {
 
 		// Listen for network events
 		if (this.world.network) {
+			// Track WebSocket state
+			console.info(`[Debug] Network initialized, checking WebSocket state...`);
+			
 			const originalOnSnapshot = this.world.network.onSnapshot?.bind(this.world.network);
 			if (originalOnSnapshot) {
 				this.world.network.onSnapshot = (data: any) => {
 					console.info(`[Debug] Snapshot received: networkId=${data?.id}, entities=${data?.entities?.length || 0}`);
 					if (data?.entities) {
-						data.entities.forEach((entity: any, index: number) => {
-							console.info(`[Debug] Snapshot entity ${index}: type=${entity?.type}, id=${entity?.id}, owner=${entity?.owner}`);
+						data.entities.forEach((entity: any) => {
+							if (entity?.type === 'player') {
+								console.info(`[Debug] Player entity in snapshot: id=${entity?.id}, owner=${entity?.owner}, name=${entity?.name}`);
+							}
 						});
 					}
 					return originalOnSnapshot(data);
 				};
 			}
 
-			// Debug WebSocket events
-			if (this.world.network.ws) {
-				const originalOnMessage = this.world.network.onPacket;
-				this.world.network.onPacket = (e: any) => {
-					console.info(`[Debug] WebSocket message received, size: ${e.data?.byteLength || 'unknown'}`);
-					return originalOnMessage.call(this.world.network, e);
-				};
+			// Monitor WebSocket initialization
+			const checkWsState = () => {
+				if (this.world?.network?.ws) {
+					const ws = this.world.network.ws;
+					console.info(`[Debug] WebSocket state: readyState=${ws.readyState} (0=CONNECTING, 1=OPEN, 2=CLOSING, 3=CLOSED)`);
+					console.info(`[Debug] WebSocket URL: ${ws.url}`);
+					
+					// Add open event listener
+					ws.addEventListener('open', () => {
+						console.info('[Debug] WebSocket opened successfully');
+					});
+					
+					// Add error listener
+					ws.addEventListener('error', (error: any) => {
+						console.error('[Debug] WebSocket error:', error);
+					});
 
-				const originalOnClose = this.world.network.onClose;
-				this.world.network.onClose = (code: any) => {
-					console.info(`[Debug] WebSocket closed with code: ${code}`);
-					return originalOnClose.call(this.world.network, code);
-				};
-			}
+					// Debug packet handler
+					const originalOnPacket = this.world.network.onPacket;
+					if (originalOnPacket) {
+						this.world.network.onPacket = (e: any) => {
+							console.info(`[Debug] WebSocket packet received, size: ${e.data?.byteLength || e.data?.length || 'unknown'} bytes`);
+							return originalOnPacket.call(this.world.network, e);
+						};
+					}
+
+					// Debug close handler
+					const originalOnClose = this.world.network.onClose;
+					if (originalOnClose) {
+						this.world.network.onClose = (event: any) => {
+							console.info(`[Debug] WebSocket closed: code=${event?.code}, reason=${event?.reason || 'unknown'}`);
+							return originalOnClose.call(this.world.network, event);
+						};
+					}
+				} else {
+					console.info('[Debug] WebSocket not yet initialized, retrying in 500ms...');
+					setTimeout(checkWsState, 500);
+				}
+			};
+			
+			// Start monitoring after a short delay
+			setTimeout(checkWsState, 100);
 		}
 	}
 
 	private async waitForPlayerAndStartBehavior(): Promise<void> {
-		const maxWaitTime = 60000; // 60 seconds max wait
+		const maxWaitTime = 120000; // 120 seconds max wait (increased for complex worlds)
 		const checkInterval = 2000; // Check every 2 seconds (slower)
 		let elapsed = 0;
+		let lastEntityCount = 0;
 
 		while (elapsed < maxWaitTime) {
 			if (this.world?.entities?.player) {
@@ -462,6 +529,13 @@ export class HyperfyService extends Service {
 				await new Promise(resolve => setTimeout(resolve, 1000));
 				await this.behaviorManager.start();
 				return;
+			}
+
+			// Log entity loading progress
+			const currentEntityCount = this.world?.entities?.items?.size || 0;
+			if (currentEntityCount !== lastEntityCount) {
+				console.info(`[BehaviorManager] Loading entities: ${currentEntityCount} loaded so far...`);
+				lastEntityCount = currentEntityCount;
 			}
 
 			console.debug(`[BehaviorManager] Waiting for player entity... (${elapsed}ms elapsed)`);
@@ -737,7 +811,7 @@ export class HyperfyService extends Service {
 	}
 
 	getPuppeteerManager() {
-		return this.puppeteerManager;
+		return null; // Puppeteer disabled due to WSL2 resource constraints
 	}
 
 	getBuildManager() {

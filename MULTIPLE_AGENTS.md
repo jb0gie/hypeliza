@@ -1,246 +1,123 @@
-# Running Multiple Hyperfy Agents
+# Multi-Agent Setup
 
-This guide explains how to run multiple Hyperfy agents simultaneously on different ports.
+This repository now supports running multiple agents simultaneously, following the pattern from elizaOS/the-org.
 
-## Quick Start
+## Agents
 
-### Method 1: Using npm scripts (Recommended)
+### 1. Schwepe (Hyperfy Agent)
+- **Directory**: `src/schwepe/`
+- **Plugin**: Hyperfy (3D virtual world)
+- **Character**: Security-focused digital rebel in Hyperfy worlds
+- **Authentication System**: Tests allies with "point emerged" → "probably entering"
 
-The package.json includes pre-configured scripts for common ports:
+### 2. Schiz0tr0n (Telegram Agent)
+- **Directory**: `src/schiz0tr0n/`
+- **Plugin**: Telegram bot
+- **Character**: Crypto meme culture personality with cockney slang
+- **Platform**: Telegram messenger
 
-```bash
-# Development mode (with hot reload)
-npm run dev:3012  # Default port
-npm run dev:3013  # Second agent
-npm run dev:3014  # Third agent
-npm run dev:3015  # Fourth agent
+## Running Agents
 
-# Production mode
-npm run start:3012  # Default port
-npm run start:3013  # Second agent
-npm run start:3014  # Third agent
-npm run start:3015  # Fourth agent
-```
+### Method 1: Command Line Arguments
 
-### Method 2: Using the shell script
+Run specific agents using command line flags:
 
 ```bash
-# Default port (3012) with default character
-./run-agent.sh
+# Run only Schwepe
+npm start -- --schwepe
 
-# Custom port
-./run-agent.sh 3013
+# Run only Schiz0tr0n
+npm start -- --schiz0tr0n
 
-# Custom port with custom character
-./run-agent.sh 3014 ./characters/alice.json
+# Run both agents
+npm start -- --schwepe --schiz0tr0n
+
+# Default (runs Schwepe if no flags specified)
+npm start
 ```
 
-### Method 3: Direct CLI commands
+### Method 2: Environment Variables
+
+Set in your `.env` file:
 
 ```bash
-# Development mode
-elizaos dev -p 3012
-elizaos dev -p 3013
-elizaos dev -p 3014
-
-# Production mode
-elizaos start -p 3012
-elizaos start -p 3013
-elizaos start -p 3014
-
-# With custom character files
-elizaos dev -p 3013 -char ./characters/alice.json
-elizaos start -p 3014 -char ./characters/bob.json
+# Enable/disable agents
+RUN_SCHWEPE=true
+RUN_SCHIZ0TR0N=true
 ```
 
-## Running Multiple Agents Simultaneously
+## Configuration
 
-### Option 1: Multiple Terminal Windows/Tabs
+### Environment Variables
 
-Open separate terminal windows and run:
+Each agent has its own namespaced environment variables to avoid conflicts:
 
+#### Schwepe Configuration
 ```bash
-# Terminal 1
-npm run dev:3012
+# AI Providers (at least one required)
+SCHWEPE_OPENROUTER_API_KEY=
+SCHWEPE_GROQ_API_KEY=
+SCHWEPE_OPENAI_API_KEY=
 
-# Terminal 2  
-npm run dev:3013
-
-# Terminal 3
-npm run dev:3014
+# Hyperfy Settings
+# For local: ws://localhost:3011/ws
+# For remote: wss://hyperfy.io/yourworld/ws
+WS_URL=wss://hyperfy.io/yourworld/ws
 ```
 
-### Option 2: Background Processes
-
+#### Schiz0tr0n Configuration
 ```bash
-# Start agents in background
-npm run dev:3012 &
-npm run dev:3013 &
-npm run dev:3014 &
+# Telegram (required)
+SCHIZ0TR0N_TELEGRAM_BOT_TOKEN=
 
-# View running processes
-jobs
-
-# Bring a specific job to foreground
-fg %1  # Brings first job to foreground
-
-# Kill background processes
-kill %1 %2 %3
+# AI Provider (required)
+SCHIZ0TR0N_OPENROUTER_API_KEY=
 ```
 
-### Option 3: Using tmux (Advanced)
+## Directory Structure
 
-```bash
-# Create new tmux session
-tmux new-session -d -s agents
-
-# Create windows for each agent
-tmux new-window -t agents:1 -n agent1 'npm run dev:3012'
-tmux new-window -t agents:2 -n agent2 'npm run dev:3013'
-tmux new-window -t agents:3 -n agent3 'npm run dev:3014'
-
-# Attach to session
-tmux attach-session -t agents
-
-# Detach: Ctrl+B, then D
-# List sessions: tmux ls
-# Kill session: tmux kill-session -t agents
+```
+src/
+├── schwepe/              # Schwepe agent
+│   └── index.ts         # Character definition
+├── schiz0tr0n/          # Schiz0tr0n agent
+│   └── index.ts         # Character definition
+├── plugin-hyperfy/      # Hyperfy plugin (used by Schwepe)
+└── index.ts             # Main entry point with multi-agent loader
 ```
 
-## Port Configuration
+## Adding New Agents
 
-### Default Ports
-- **3012**: Default ElizaOS port
-- **3013-3015**: Pre-configured additional ports
+1. Create a new directory under `src/` with the agent name
+2. Add an `index.ts` file with the character definition
+3. Import the character in `src/index.ts`
+4. Create a new `ProjectAgent` configuration
+5. Add command line flag and/or environment variable support
+6. Update the agent selection logic
 
-### Custom Ports
-You can use any available port:
+Example:
+```typescript
+// src/newagent/index.ts
+import { Character } from '@elizaos/core';
 
-```bash
-elizaos dev -p 8080
-elizaos dev -p 9000
-./run-agent.sh 4000
+export const character: Character = {
+  name: 'newagent',
+  // ... character configuration
+};
+
+// In src/index.ts
+import { character as newAgentCharacter } from './newagent';
+
+const newAgent: ProjectAgent = {
+  character: newAgentCharacter,
+  init: async (runtime: IAgentRuntime) => await initCharacter({ runtime }),
+  plugins: [], // Add plugins as needed
+};
 ```
 
-### Environment Variable Method
-You can also set the PORT environment variable:
+## Notes
 
-```bash
-PORT=3013 npm run dev
-PORT=3014 elizaos start
-```
-
-## Character Configuration
-
-### Using Different Characters
-Each agent can use a different character file:
-
-```bash
-# Agent 1: Default character on port 3012
-npm run dev:3012
-
-# Agent 2: Alice character on port 3013
-elizaos dev -p 3013 -char ./characters/alice.json
-
-# Agent 3: Bob character on port 3014
-elizaos dev -p 3014 -char ./characters/bob.json
-```
-
-### Character File Structure
-Create character files in a `characters/` directory:
-
-```json
-{
-  "name": "Alice",
-  "bio": "A helpful AI assistant specialized in coding",
-  "personality": "friendly and technical",
-  "knowledge": ["programming", "web development"],
-  "style": {
-    "tone": "casual",
-    "humor": "witty"
-  }
-}
-```
-
-## Monitoring Multiple Agents
-
-### Check Running Agents
-```bash
-# List processes using ports
-lsof -i :3012
-lsof -i :3013
-lsof -i :3014
-
-# Check all ElizaOS processes
-ps aux | grep elizaos
-
-# Monitor system resources
-htop
-```
-
-### Logs
-Each agent will have its own log output. Consider using log management:
-
-```bash
-# Redirect logs to files
-npm run dev:3012 > logs/agent-3012.log 2>&1 &
-npm run dev:3013 > logs/agent-3013.log 2>&1 &
-
-# Tail logs
-tail -f logs/agent-3012.log
-tail -f logs/agent-3013.log
-```
-
-## Troubleshooting
-
-### Port Already in Use
-```bash
-# Find what's using a port
-lsof -i :3012
-
-# Kill process using port
-kill -9 $(lsof -t -i:3012)
-```
-
-### Memory Issues
-Running multiple agents can be memory-intensive:
-
-```bash
-# Monitor memory usage
-free -h
-htop
-
-# Limit memory per process (if needed)
-node --max-old-space-size=2048 $(which elizaos) dev -p 3012
-```
-
-### Performance Optimization
-- Use production mode (`start`) instead of development mode (`dev`) for better performance
-- Consider running agents on different machines for heavy loads
-- Monitor CPU and memory usage with `htop` or similar tools
-
-## Examples
-
-### Development Setup (3 agents)
-```bash
-# Terminal 1: Main agent
-npm run dev:3012
-
-# Terminal 2: Testing agent  
-npm run dev:3013
-
-# Terminal 3: Experimental agent with custom character
-elizaos dev -p 3014 -char ./characters/experimental.json
-```
-
-### Production Setup (2 agents)
-```bash
-# Background processes
-npm run start:3012 > logs/main-agent.log 2>&1 &
-npm run start:3013 > logs/backup-agent.log 2>&1 &
-
-# Monitor
-tail -f logs/main-agent.log
-```
-
-This setup allows you to run multiple Hyperfy agents simultaneously, each with their own port, character, and configuration! 
+- Each agent runs independently with its own runtime
+- Agents can have different AI providers and configurations
+- The Hyperfy plugin is currently only used by Schwepe
+- Default behavior runs Schwepe if no specific agents are requested

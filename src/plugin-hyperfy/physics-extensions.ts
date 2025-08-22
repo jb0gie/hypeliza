@@ -6,21 +6,41 @@ export function extendThreeForPhysics() {
   // Check if already extended
   if ((THREE.Vector3.prototype as any).toPxVec3) return;
 
-  // Mock PhysX vector classes
-  class MockPxVec3 {
-    x: number = 0;
-    y: number = 0;
-    z: number = 0;
-  }
+  // Wait for PHYSX to be available
+  if (typeof globalThis.PHYSX === 'undefined') {
+    console.warn('[Physics Extensions] PHYSX not loaded yet, using mock vectors');
+    // Mock PhysX vector classes as fallback
+    class MockPxVec3 {
+      x: number = 0;
+      y: number = 0;
+      z: number = 0;
+    }
 
-  class MockPxExtendedVec3 {
-    x: number = 0;
-    y: number = 0;
-    z: number = 0;
-  }
+    class MockPxExtendedVec3 {
+      x: number = 0;
+      y: number = 0;
+      z: number = 0;
+    }
 
-  const _pxVec3 = new MockPxVec3();
-  const _pxExtVec3 = new MockPxExtendedVec3();
+    const _pxVec3 = new MockPxVec3();
+    const _pxExtVec3 = new MockPxExtendedVec3();
+    
+    // Store mock references
+    (globalThis as any)._pxVec3 = _pxVec3;
+    (globalThis as any)._pxExtVec3 = _pxExtVec3;
+  } else {
+    console.log('[Physics Extensions] Using real PHYSX vectors');
+    // Use real PHYSX vectors
+    const _pxVec3 = new globalThis.PHYSX.PxVec3();
+    const _pxExtVec3 = new globalThis.PHYSX.PxExtendedVec3();
+    
+    // Store real references
+    (globalThis as any)._pxVec3 = _pxVec3;
+    (globalThis as any)._pxExtVec3 = _pxExtVec3;
+  }
+  
+  const _pxVec3 = (globalThis as any)._pxVec3;
+  const _pxExtVec3 = (globalThis as any)._pxExtVec3;
 
   // Add toPxVec3 method to THREE.Vector3
   (THREE.Vector3.prototype as any).toPxVec3 = function(pxVec3 = _pxVec3) {
