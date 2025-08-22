@@ -17,9 +17,6 @@ RUN npm ci
 # Copy source code
 COPY src ./src
 
-# Copy character files (if they exist)
-COPY characters ./characters 2>/dev/null || true
-
 # Build the application
 RUN npm run build
 
@@ -52,25 +49,25 @@ RUN npm ci --only=production
 # Copy built application from builder stage
 COPY --from=builder /app/dist ./dist
 
-# Copy character files (if they exist)
-COPY --from=builder /app/characters ./characters 2>/dev/null || true
+# Copy startup script
+COPY start-agents.sh ./
 
-# Copy any necessary public files for Hyperfy plugin
-COPY --from=builder /app/src/plugin-hyperfy/physx ./dist/plugin-hyperfy/physx 2>/dev/null || true
-COPY --from=builder /app/src/plugin-hyperfy/public ./dist/plugin-hyperfy/public 2>/dev/null || true
+# Make startup script executable
+RUN chmod +x start-agents.sh
 
 # Create non-root user
 RUN addgroup -g 1001 -S nodejs && \
     adduser -S nodejs -u 1001
 
+# Create necessary directories
+RUN mkdir -p /app/data /app/logs && \
+    chown -R nodejs:nodejs /app
+
 # Switch to non-root user
 USER nodejs
 
-# Expose the default port
-EXPOSE 3000
-
-# Copy startup script
-COPY --chmod=755 start-agents.sh /app/
+# Expose the default ports
+EXPOSE 3000 3001
 
 # Start the application
 CMD ["/app/start-agents.sh"]
