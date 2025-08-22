@@ -6,13 +6,17 @@ RUN apk add --no-cache python3 make g++ git
 
 WORKDIR /app
 
-# Copy package files
+# Copy package files and npm config
 COPY package*.json ./
+COPY .npmrc ./
 COPY tsconfig.json ./
 COPY tsup.config.ts ./
 
-# Install dependencies (using legacy-peer-deps due to dependency conflicts)
-RUN npm ci --legacy-peer-deps
+# Clean install dependencies
+RUN npm ci --legacy-peer-deps || \
+    (echo "npm ci failed, trying npm install" && \
+     rm -rf node_modules package-lock.json && \
+     npm install --legacy-peer-deps)
 
 # Copy source code
 COPY src ./src
@@ -40,11 +44,15 @@ ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true \
 
 WORKDIR /app
 
-# Copy package files
+# Copy package files and npm config
 COPY package*.json ./
+COPY .npmrc ./
 
-# Install production dependencies only (using legacy-peer-deps)
-RUN npm ci --only=production --legacy-peer-deps
+# Install production dependencies
+RUN npm ci --only=production --legacy-peer-deps || \
+    (echo "npm ci failed, trying npm install" && \
+     rm -rf node_modules package-lock.json && \
+     npm install --production --legacy-peer-deps)
 
 # Copy built application from builder stage
 COPY --from=builder /app/dist ./dist
