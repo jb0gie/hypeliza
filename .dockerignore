@@ -58,7 +58,7 @@ tmp/
 temp/
 *.tmp
 
-# Docker files (when building)
-Dockerfile
-docker-compose.yml
-.dockerignore
+# Docker files - DO NOT exclude these, Coolify needs them!
+# Dockerfile
+# docker-compose.yml
+# .dockerignore
