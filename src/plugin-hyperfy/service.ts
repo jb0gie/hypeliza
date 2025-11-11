@@ -24,11 +24,13 @@ import { VoiceManager } from './managers//voice-manager.js'
 // import { PuppeteerManager } from './managers/puppeteer-manager.js' // Disabled due to WSL2 resource constraints
 import { BuildManager } from './managers/build-manager.js'
 import { hashFileBuffer, getModuleDirectory } from './utils'
+import * as THREE from './hyperfy/src/core/extras/three'
+import { Layers } from './hyperfy/src/core/extras/Layers'
 
 const moduleDirPath = getModuleDirectory();
 const LOCAL_AVATAR_PATH = `${moduleDirPath}/avatars/schwepe.vrm`;
 
-const HYPERFY_WS_URL = process.env.WS_URL || 'ws://localhost:3011/ws'
+const DEFAULT_HYPERFY_WS_URL = 'ws://localhost:3011/ws'
 const HYPERFY_APPEARANCE_POLL_INTERVAL = 30000
 
 
@@ -55,6 +57,7 @@ export class HyperfyService extends Service {
 	private voiceManager: VoiceManager;
 	// private puppeteerManager: PuppeteerManager | null = null; // Disabled due to WSL2 resource constraints
 	private buildManager: BuildManager;
+	private spawnSafetyApplied: boolean = false
 
 	public get currentWorldId(): UUID | null {
 		return this._currentWorldId
@@ -72,11 +75,13 @@ export class HyperfyService extends Service {
 	static async start(runtime: IAgentRuntime): Promise<HyperfyService> {
 		console.info('*** Starting Hyperfy service ***')
 		const service = new HyperfyService(runtime)
-		console.info(`Attempting automatic connection to default Hyperfy URL: ${HYPERFY_WS_URL}`)
-		
+		// Prefer HYPERFY_WS_URL over WS_URL so project-level .env can override shell exports
+		const resolvedWsUrl = process.env.HYPERFY_WS_URL || process.env.WS_URL || process.env.NEXT_PUBLIC_WS_URL || DEFAULT_HYPERFY_WS_URL
+		console.info(`Attempting automatic connection to default Hyperfy URL: ${resolvedWsUrl}`)
+
 		// Extract world ID from the URL or use default for local connections
 		let worldId: UUID;
-		if (HYPERFY_WS_URL.includes('localhost') || HYPERFY_WS_URL.includes('127.0.0.1')) {
+		if (resolvedWsUrl.includes('localhost') || resolvedWsUrl.includes('127.0.0.1')) {
 			// Local development - use default UUID
 			worldId = '00000000-0000-0000-0000-000000000000' as UUID;
 		} else {
@@ -85,13 +90,13 @@ export class HyperfyService extends Service {
 			// The server will assign us to the correct world based on the WS URL
 			worldId = createUniqueUuid(runtime.agentId, Date.now().toString()) as UUID;
 		}
-		
-		// Try to load existing auth token or leave undefined
-		// For remote worlds, you typically need a valid auth token from that specific world
-		const authToken: string | undefined = undefined
+
+		// Try to provide an auth token from env if available; otherwise let storage fetch it from snapshot
+		// For remote worlds, a valid token is often required to receive the snapshot and colliders
+		const authToken: string | undefined = process.env.HYPERFY_AUTH_TOKEN || process.env.AUTH_TOKEN || undefined
 
 		service
-			.connect({ wsUrl: HYPERFY_WS_URL, worldId, authToken })
+			.connect({ wsUrl: resolvedWsUrl, worldId, authToken })
 			.then(() => console.info(`Automatic Hyperfy connection initiated.`))
 			.catch(err => console.error(`Automatic Hyperfy connection failed: ${err.message}`))
 
@@ -215,12 +220,12 @@ export class HyperfyService extends Service {
 			if (typeof this.world.init !== 'function') {
 				throw new Error('world.init is not a function')
 			}
-			
+
 			// Add timeout for world initialization to prevent hanging on complex worlds
-			const initTimeout = new Promise((_, reject) => 
+			const initTimeout = new Promise((_, reject) =>
 				setTimeout(() => reject(new Error('World initialization timed out after 30 seconds')), 30000)
 			);
-			
+
 			try {
 				await Promise.race([
 					this.world.init(hyperfyConfig),
@@ -234,11 +239,11 @@ export class HyperfyService extends Service {
 					throw error;
 				}
 			}
-			
+
 			// Physics extensions are handled by the Physics system in hyperfy core
 			// Don't call extendThreeForPhysics here as it conflicts with extendThreePhysX
 			console.info('World physics initialized.')
-			
+
 			// Give the world time to stabilize after initialization (reduced from 2000ms)
 			await new Promise(resolve => setTimeout(resolve, 500));
 
@@ -263,6 +268,9 @@ export class HyperfyService extends Service {
 
 			// Add debugging for world events
 			this.addWorldDebugging();
+
+			// Add minimal spawn safety nudge to avoid initial fall-through
+			this.addSpawnSafetyNudge();
 
 			// Start behavior manager after player entity is ready (with internal delay)
 			this.waitForPlayerAndStartBehavior();
@@ -455,7 +463,7 @@ export class HyperfyService extends Service {
 		if (this.world.network) {
 			// Track WebSocket state
 			console.info(`[Debug] Network initialized, checking WebSocket state...`);
-			
+
 			const originalOnSnapshot = this.world.network.onSnapshot?.bind(this.world.network);
 			if (originalOnSnapshot) {
 				this.world.network.onSnapshot = (data: any) => {
@@ -477,12 +485,12 @@ export class HyperfyService extends Service {
 					const ws = this.world.network.ws;
 					console.info(`[Debug] WebSocket state: readyState=${ws.readyState} (0=CONNECTING, 1=OPEN, 2=CLOSING, 3=CLOSED)`);
 					console.info(`[Debug] WebSocket URL: ${ws.url}`);
-					
+
 					// Add open event listener
 					ws.addEventListener('open', () => {
 						console.info('[Debug] WebSocket opened successfully');
 					});
-					
+
 					// Add error listener
 					ws.addEventListener('error', (error: any) => {
 						console.error('[Debug] WebSocket error:', error);
@@ -510,7 +518,7 @@ export class HyperfyService extends Service {
 					setTimeout(checkWsState, 500);
 				}
 			};
-			
+
 			// Start monitoring after a short delay
 			setTimeout(checkWsState, 100);
 		}
@@ -816,5 +824,47 @@ export class HyperfyService extends Service {
 
 	getBuildManager() {
 		return this.buildManager;
+	}
+
+	/**
+	 * Minimal safety nudge: on first stable tick after snapshot, if ground sweep
+	 * finds no environment/prop below the player within a short range, teleport
+	 * player up slightly to avoid starting interpenetrating and falling through.
+	 */
+	private addSpawnSafetyNudge(): void {
+		if (this.spawnSafetyApplied) return
+		let checks = 0
+		const maxChecks = 40 // ~2s at 50Hz
+		const check = () => {
+			try {
+				const world: any = this.world
+				const player = world?.entities?.player
+				const physics = world?.physics
+				if (!world || !player || !physics || !physics.scene) {
+					if (checks++ < maxChecks) setTimeout(check, 50)
+					return
+				}
+				// Build a downward ray from player base
+				const origin = new THREE.Vector3().copy(player.base?.position || player.position || new THREE.Vector3())
+				const DOWN = new THREE.Vector3(0, -1, 0)
+				const maxDistance = 0.6 // small probe under feet
+				const hitMask = (Layers.environment?.group || 0) | (Layers.prop?.group || 0)
+				const hit = physics.raycast(origin, DOWN, maxDistance, hitMask)
+				if (!hit) {
+					// Nudge up a touch and snap to reduce penetration
+					const pos = origin.clone().add(new THREE.Vector3(0, 0.25, 0))
+					player.teleport({ position: pos })
+					this.spawnSafetyApplied = true
+					return
+				}
+				// Found ground – consider it stable, stop checking
+				this.spawnSafetyApplied = true
+			} catch (e) {
+				// keep silent; try again briefly
+			} finally {
+				if (!this.spawnSafetyApplied && checks++ < maxChecks) setTimeout(check, 50)
+			}
+		}
+		setTimeout(check, 100)
 	}
 }

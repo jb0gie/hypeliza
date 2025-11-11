@@ -39,6 +39,15 @@ export class AgentEnvironment extends System {
     super(world)
   }
 
+  private normalizeHexColor(input: string | number | undefined): string | number | undefined {
+    if (typeof input !== 'string') return input;
+    // Accept '#RRGGBBAA' or 'RRGGBBAA' → strip alpha, keep '#RRGGBB'
+    const m8 = input.match(/^#?([0-9a-fA-F]{8})$/);
+    if (m8) return `#${m8[1].slice(0, 6)}`;
+    // Accept '#RRGGBB' or color names as-is
+    return input.startsWith('#') ? input : `#${input}`.replace(/^##/, '#');
+  }
+
   async start() {
     this.base = {
       // Removed old asset references - using new scene system
@@ -139,11 +148,12 @@ export class AgentEnvironment extends System {
 
     for (const light of this.csm.lights) {
       light.intensity = sunIntensity
-      light.color.set(sunColor)
+      const safeSun = this.normalizeHexColor(sunColor)
+      light.color.set(safeSun as any)
     }
 
     if (isNumber(fogNear) && isNumber(fogFar) && fogColor) {
-      const color = new THREE.Color(fogColor)
+      const color = new THREE.Color(this.normalizeHexColor(fogColor) as any)
       this.world.stage.scene.fog = new THREE.Fog(color, fogNear, fogFar)
     } else {
       this.world.stage.scene.fog = null
