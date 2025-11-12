@@ -4,8 +4,8 @@ WORKDIR /app
 # Install dependencies
 FROM base AS install
 RUN mkdir -p /temp/dev
-COPY package.json package-lock.json bun.lock /temp/dev/
-RUN cd /temp/dev && bun install --frozen-lockfile
+COPY package.json /temp/dev/
+RUN cd /temp/dev && bun install
 
 # Build the application
 FROM base AS build
