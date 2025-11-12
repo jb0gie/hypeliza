@@ -1,0 +1,51 @@
+version: '3.8'
+
+services:
+  hypeliza:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "${SERVER_PORT:-3000}:${SERVER_PORT:-3000}"
+    environment:
+      # OpenAI Configuration
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      
+      # Anthropic Configuration
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      
+      # OpenAI TTS
+      - OPENAI_TTS_MODEL=${OPENAI_TTS_MODEL}
+      - OPENAI_TTS_VOICE=${OPENAI_TTS_VOICE}
+      - OPENAI_TTS_INSTRUCTIONS=${OPENAI_TTS_INSTRUCTIONS}
+      
+      # ElevenLabs Voice Settings
+      - ELEVENLABS_XI_API_KEY=${ELEVENLABS_XI_API_KEY}
+      - ELEVENLABS_MODEL_ID=${ELEVENLABS_MODEL_ID:-eleven_multilingual_v2}
+      - ELEVENLABS_VOICE_ID=${ELEVENLABS_VOICE_ID:-EXAVITQu4vr4xnSDxMaL}
+      - ELEVENLABS_VOICE_STABILITY=${ELEVENLABS_VOICE_STABILITY:-0.5}
+      - ELEVENLABS_VOICE_SIMILARITY_BOOST=${ELEVENLABS_VOICE_SIMILARITY_BOOST:-0.9}
+      - ELEVENLABS_VOICE_STYLE=${ELEVENLABS_VOICE_STYLE:-0.66}
+      - ELEVENLABS_VOICE_USE_SPEAKER_BOOST=${ELEVENLABS_VOICE_USE_SPEAKER_BOOST:-false}
+      - ELEVENLABS_OPTIMIZE_STREAMING_LATENCY=${ELEVENLABS_OPTIMIZE_STREAMING_LATENCY:-4}
+      - ELEVENLABS_OUTPUT_FORMAT=${ELEVENLABS_OUTPUT_FORMAT:-pcm_16000}
+      
+      # Database Connection
+      - POSTGRES_URL=${POSTGRES_URL}
+      
+      # Server Configuration
+      - SERVER_PORT=${SERVER_PORT:-3000}
+      
+      # Hyperfy World WebSocket URL
+      - WS_URL=${WS_URL:-wss://chill.hyperfy.xyz/ws}
+    volumes:
+      - ./characters:/app/characters
+      - ./data:/app/data
+      - ./generatedImages:/app/generatedImages
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:${SERVER_PORT:-3000}/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
