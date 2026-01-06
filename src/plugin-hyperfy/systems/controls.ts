@@ -122,6 +122,22 @@ export class AgentControls extends System {
     // }
   }
 
+  // Enable super sprint mode (hold shift)
+  enableSprint(enable: boolean = true) {
+    this.setKey('shiftLeft', enable);
+    this.setKey('shiftRight', enable);
+    if (enable) {
+      logger.debug('[Controls] Super sprint ENABLED for CLETAG!');
+    } else {
+      logger.debug('[Controls] Super sprint DISABLED');
+    }
+  }
+
+  // Check if sprint is currently active
+  isSprinting(): boolean {
+    return this.shiftLeft.down || this.shiftRight.down;
+  }
+
   // Reset pressed/released flags at the end of the frame
   // This is important for detecting single presses/releases
   postLateUpdate() {
