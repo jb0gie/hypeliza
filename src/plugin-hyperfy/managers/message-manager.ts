@@ -16,10 +16,11 @@ export class MessageManager {
   }
 
   async handleMessage(msg): Promise<void> {
+    console.info(`[MessageManager] Starting handleMessage for message ID: ${msg.id}`)
     await agentActivityLock.run(async () => {
       const service = this.getService();
       const world = service.getWorld();
-      
+
       // Play thinking emote while processing (non-blocking)
       // Using 'looking around' as thinking emote since 'thinking' doesn't exist
       try {
@@ -34,7 +35,14 @@ export class MessageManager {
       const senderName = msg.from || 'System'
       const messageBody = msg.body || ''
       const _currentWorldId = service.currentWorldId;
-      console.info(`[Chat Received] From: ${senderName}, ID: ${msg.id}, Body: "${messageBody}"`)
+      console.info(`[DEBUG] handleMessage called with:`, JSON.stringify({
+        msg,
+        agentPlayerId,
+        senderName,
+        messageBody,
+        msgFromId: msg.fromId,
+        msgId: msg.id
+      }, null, 2))
 
       // Respond only to messages not from the agent itself
       if (msg.fromId && msg.fromId !== agentPlayerId) {
@@ -86,7 +94,7 @@ export class MessageManager {
         const callback: HandlerCallback = async (responseContent: Content): Promise<Memory[]> => {
           console.info(`[Hyperfy Chat Callback] Received response: ${JSON.stringify(responseContent)}`)
 
-          console.log(`[Hyperfy Chat Response] ${responseContent}`)
+          console.log(`[Hyperfy Chat Response]`, responseContent)
           const emote = responseContent.emote as string;
           // Send response back to Hyperfy
           const emoteManager = service.getEmoteManager();
@@ -153,7 +161,10 @@ export class MessageManager {
         )
 
         console.info(`[Hyperfy Chat] Successfully emitted event for message: ${messageId}`)
+      } else {
+        console.info(`[Hyperfy Chat] Skipping message from self or undefined sender`)
       }
+      console.info(`[MessageManager] Finished handleMessage for message ID: ${msg.id}`)
     });
   }
 

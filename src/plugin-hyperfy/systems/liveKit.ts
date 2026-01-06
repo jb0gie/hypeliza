@@ -28,6 +28,7 @@ export class AgentLiveKit extends System {
   }
 
   async deserialize(opts: LiveKitInitOptions): Promise<void> {
+    if (!opts) return; // Fix: Handle undefined opts
     const { wsUrl, token } = opts;
     this.room = new Room();
     await this.room.connect(wsUrl, token, {

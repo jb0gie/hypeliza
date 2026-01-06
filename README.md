@@ -1,89 +1,22 @@
-# Eliza x Hyperfy Agent
+# Technical Caveats
 
-This project wraps some plugin development of a Hyperfy client that allows Eliza to connect to a Hyperfy world like a user. In the future, the Hyperfy portion may be broken out and published as a separate plugin — for now, it's included here.
+## Build & Installation
+- Run `bun install` twice to ensure postinstall scripts execute correctly
 
-## 💠 Getting Started
+## WebSocket Configuration
+- `HYPERFY_WS_URL` takes precedence over `WS_URL` for Hyperfy world connection
+- Default WebSocket URL: `wss://chill.hyperfy.xyz/ws`
+- Local development URL: `ws://localhost:3000/ws`
 
-### 1. Clone the project
+## Screen Perception
+- Requires vision-capable LLM plugin (OpenAI GPT-4o, Gemini with vision)
+- Puppeteer-based screenshots currently disabled in WSL2 due to resource constraints
 
-Clone this repository using:
+## Voice Chat
+- Requires ElevenLabs or OpenAI voice configuration
+- ElevenLabs needs: `ELEVENLABS_XI_API_KEY`, `ELEVENLABS_MODEL_ID`, `ELEVENLABS_VOICE_ID`
+- OpenAI voice requires `OPENAI_API_KEY`
 
-```bash
-git clone --recurse-submodules https://github.com/elizaOS/eliza-3d-hyperfy-starter.git
-```
-
-### 2. Setup environment variables
-
-Copy the example environment file and rename it:
-
-```bash
-cp .env.example .env
-```
-
-Edit the `.env` file and fill in the necessary values.
-
-#### Notes on `.env` settings:
-
-* `WS_URL`: WebSocket URL for connecting to a Hyperfy world.
-
-  * Default: `wss://chill.hyperfy.xyz/ws` (our public world)
-  * To connect to your own local world:
-
-    1. Clone and run Hyperfy: [https://github.com/hyperfy-xyz/hyperfy](https://github.com/hyperfy-xyz/hyperfy)
-    2. If it runs on port `3000`, set:
-
-       ```env
-       WS_URL=ws://localhost:3000/ws
-       ```
-
-* `SERVER_PORT`: The port this app will run on (e.g., `3001`, `4000`, etc.)
-
-### 3. Run the project
-
-```bash
-bun install
-bun install # run twice to ensure postinstall scripts run correctly
-bun run build
-bun run dev
-```
-
----
-
-## 🗣️ Optional: Enable Voice Chat
-
-You can optionally enable voice chat support via one of the following methods:
-
-### Option 1: ElevenLabs
-
-1. Set ElevenLabs-related variables in `.env`:
-
-   * `ELEVENLABS_XI_API_KEY`
-   * `ELEVENLABS_MODEL_ID`
-   * `ELEVENLABS_VOICE_ID`
-   * etc.
-
-2. Add the ElevenLabs plugin to your character settings file.
-
-### Option 2: OpenAI
-
-1. Set the `OPENAI_API_KEY` in `.env`.
-2. Configure your character to use OpenAI's voice features.
-
----
-
-## 🖼️ Optional: Enable Screen Perception
-
-To enable **screen perception** (where Eliza can describe what's visible in the 3D scene), you must use an LLM plugin that supports **image description**.
-
-### Requirements:
-
-* Include an LLM plugin in your character config that supports vision/image inputs.
-
-  * For example, a plugin wrapping OpenAI's GPT-4o or Gemini with vision support.
-* Ensure your `.env` is configured with the appropriate API key and any required parameters for that LLM.
-
-This will allow Eliza to "see" the scene and respond based on visual content from the rendered environment.
-
----
-
-Feel free to open issues or contribute if you're building something cool with Eliza and Hyperfy!
+## Character API Keys
+- Schwepe character: `SCHWEPE_OPENROUTER_API_KEY`, `SCHWEPE_GROQ_API_KEY`, or `SCHWEPE_OPENAI_API_KEY`
+- Cleetus character: `CLEETUS_OPENROUTER_API_KEY`, `CLEETUS_GROQ_API_KEY`, or `CLEETUS_OPENAI_API_KEY`

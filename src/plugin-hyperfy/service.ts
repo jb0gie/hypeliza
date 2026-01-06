@@ -28,7 +28,7 @@ import * as THREE from './hyperfy/src/core/extras/three'
 import { Layers } from './hyperfy/src/core/extras/Layers'
 
 const moduleDirPath = getModuleDirectory();
-const LOCAL_AVATAR_PATH = `${moduleDirPath}/avatars/schwepe.vrm`;
+const LOCAL_AVATAR_PATH = `${moduleDirPath}/avatars/Cleetus.vrm`;
 
 const DEFAULT_HYPERFY_WS_URL = 'ws://localhost:3011/ws'
 const HYPERFY_APPEARANCE_POLL_INTERVAL = 30000
@@ -277,9 +277,9 @@ export class HyperfyService extends Service {
 
 			this.isConnectedState = true
 
-			this.startAppearancePolling()
+			this.connectionTime = Date.now(); // Record connection time FIRST before processing messages
 
-			this.connectionTime = Date.now(); // Record connection time
+			this.startAppearancePolling()
 
 			console.info(`HyperfyService connected successfully to ${this.wsUrl}`)
 		} catch (error: any) {
@@ -764,10 +764,11 @@ export class HyperfyService extends Service {
 			}
 		});
 
-		this.world.chat.subscribe((msgs: any[]) => {
+		this.world.chat.subscribe(async (msgs: any[]) => {
 			// Wait for player entity (ensures world/chat exist too)
 			if (!this.world || !this.world.chat || !this.world.entities?.player || !this.connectionTime) return
 
+			console.debug(`[Chat Subscription] Received ${msgs.length} messages`)
 			const newMessagesFound: any[] = [] // Temporary list for new messages
 
 			// Step 1: Identify new messages and update processed set
@@ -795,9 +796,10 @@ export class HyperfyService extends Service {
 			if (newMessagesFound.length > 0) {
 				console.info(`[Chat] Found ${newMessagesFound.length} new messages to process.`)
 
-				newMessagesFound.forEach(async (msg: any) => {
+				// Process messages sequentially to avoid race conditions
+				for (const msg of newMessagesFound) {
 					await this.messageManager.handleMessage(msg);
-				})
+				}
 			}
 		})
 	}
