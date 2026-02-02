@@ -24,3 +24,10 @@
 - Three.js-based 3D rendering with VRM avatar support
 - LiveKit integration for spatial voice chat
 - WebSocket real-time communication with message deduplication
+
+## OpenRouter API Issues
+- Free models on OpenRouter can be discontinued without notice (e.g., `mistralai/devstral-2512:free`)
+- When a free model ends, the API returns 404 "Not Found" with message about migration to paid slug
+- Error manifests as `AI_APICallError: Not Found` in BehaviorManager logs
+- To fix: Update `.env` to use a current free model (e.g., `google/gemma-3-27b-it:free`)
+- Verify model availability at https://openrouter.ai/api/v1/models before deployment
