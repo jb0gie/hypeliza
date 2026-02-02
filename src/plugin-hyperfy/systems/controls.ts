@@ -1,6 +1,6 @@
 import { System } from '../hyperfy/src/core/systems/System.js'
 import { logger } from '@elizaos/core';
-import * as THREE from 'three';
+import * as THREE from '../hyperfy/src/core/extras/three';
 import { Vector3Enhanced } from '../hyperfy/src/core/extras/Vector3Enhanced.js'
 
 const FORWARD = new THREE.Vector3(0, 0, -1)
@@ -41,6 +41,8 @@ export class AgentControls extends System {
   screen: any = undefined; // PlayerLocal checks for this
   xrLeftStick = { value: { x: 0, y: 0, z: 0 } };
   xrRightStick = { value: { x: 0, y: 0, z: 0 } };
+
+  // Basic movement controls (spatial awareness temporarily disabled for locomotion fix)
   keyW: any;
   keyA: any;
   keyS: any;
@@ -93,6 +95,7 @@ export class AgentControls extends System {
     });
 
     this.camera = this.createCamera(this);
+    // Spatial awareness temporarily disabled for basic locomotion
   }
 
   // Method for the agent script to set a key state
@@ -253,15 +256,15 @@ export class AgentControls extends System {
     allowSprint: boolean = true
   ): Promise<void> {
     const player = this.world.entities.player;
-    
+
     // Check if player has capsule physics
     if (!player.capsule) {
       logger.error("[Controls] Player capsule not found! Physics may not be initialized.");
       return;
     }
-    
+
     const tickDelay = (ms: number) => new Promise(res => setTimeout(res, ms));
-  
+
     let previousPosition = player.base.position.clone();
     let noProgressTicks = 0;
     const STUCK_THRESHOLD = 0.05;
@@ -269,22 +272,23 @@ export class AgentControls extends System {
     let recoveryAttempts = 0;
     const MAX_RECOVERY_ATTEMPTS = 3;
     const SPRINT_DISTANCE_THRESHOLD = 15.0;
-  
+    const currentVelocity = new THREE.Vector3();
+
     while (!token.aborted && this._currentWalkToken === token) {
       if (!this._validatePlayerState("_navigateTowards")) break;
-  
+
       const targetPos = getTargetPosition();
       if (!targetPos) {
         logger.warn(`[Controls] Target position is null during navigation.`);
         this.stopNavigation("target null");
         break;
       }
-  
+
       const playerPos = v1.copy(player.base.position);
       const horizontalDistance = playerPos.clone().setY(0).distanceTo(targetPos.clone().setY(0));
       const verticalDistance = Math.abs(targetPos.y - playerPos.y);
       const totalDistance = playerPos.distanceTo(targetPos);
-  
+
       // If target is too high/low (more than 3 meters), teleport immediately
       if (verticalDistance > 3.0 && horizontalDistance <= stopDistance * 2) {
         logger.info(`[Controls] Target is ${verticalDistance.toFixed(1)}m vertically away. Teleporting.`);
@@ -295,13 +299,13 @@ export class AgentControls extends System {
         this.stopNavigation("teleported due to height difference");
         break;
       }
-  
+
       if (horizontalDistance <= stopDistance) {
         logger.info(`[Controls] Reached target within ${stopDistance}m.`);
         this.stopNavigation("target reached");
         break;
       }
-  
+
       // --- Stuck Detection ---
       const progressDistance = playerPos.distanceTo(previousPosition);
       if (progressDistance < STUCK_THRESHOLD) {
@@ -313,29 +317,35 @@ export class AgentControls extends System {
         }
       } else {
         noProgressTicks = 0;
+        // Update current velocity based on actual movement
+        currentVelocity.copy(playerPos).sub(previousPosition).divideScalar(CONTROLS_TICK_INTERVAL / 1000);
       }
       previousPosition.copy(playerPos);
-  
+
+      // Simple navigation - face target and move forward
+      // NOTE: Spatial awareness temporarily disabled for basic locomotion
+
       if (noProgressTicks >= MAX_NO_PROGRESS_TICKS) {
         if (++recoveryAttempts > MAX_RECOVERY_ATTEMPTS) {
           logger.error("[Controls] Max recovery attempts reached. Teleporting to target.");
-        
+
           const targetPos = getTargetPosition();
           if (targetPos) {
             const direction = targetPos.clone().sub(player.base.position).setY(0).normalize();
             const finalPosition = targetPos.clone().addScaledVector(direction, -stopDistance);
             const yRotation = Math.atan2(-direction.x, -direction.z);
-        
+
             player.teleport({
               position: finalPosition,
               rotationY: yRotation,
             });
           }
-        
+
           this.stopNavigation("teleported after max recovery");
           break;
-        }        
-  
+        }
+
+        // Simple recovery - just try rotating randomly
         logger.warn("[Controls] Stuck detected. Attempting recovery rotation.");
         const randomDir: 'left' | 'right' = Math.random() < 0.5 ? 'left' : 'right';
         try {
@@ -349,22 +359,28 @@ export class AgentControls extends System {
         this.setKey('space', true);
         noProgressTicks = 0;
       } else {
-        // Face toward target
+        // Normal navigation - simply face target and move forward
         const direction = targetPos.clone().sub(playerPos).setY(0).normalize();
-        const desiredQuat = q1.setFromUnitVectors(FORWARD, direction);
-        player.base.quaternion = desiredQuat;
-        const yRot = e1.setFromQuaternion(player.base.quaternion, 'YXZ').y;
-        player.cam.rotation.y = yRot;
+        const yRotation = Math.atan2(-direction.x, -direction.z);
+
+        if (typeof player.rotateTo === 'function') {
+          player.rotateTo(yRotation);
+        } else {
+          player.base.rotation.y = yRotation;
+          player.base.quaternion.setFromAxisAngle(new THREE.Vector3(0, 1, 0), yRotation);
+          player.cam.rotation.y = yRotation;
+          this.control.camera.rotation.y = yRotation;
+        }
         this.setKey('space', false);
       }
-  
+
       // Simulate movement
       this.setKey('keyW', true);
       this.setKey('keyS', false);
       this.setKey('keyA', false);
       this.setKey('keyD', false);
       this.setKey('shiftLeft', allowSprint && horizontalDistance > SPRINT_DISTANCE_THRESHOLD);
-  
+
       await tickDelay(CONTROLS_TICK_INTERVAL);
     }
   }
@@ -375,44 +391,71 @@ export class AgentControls extends System {
       logger.warn("[Controls rotateTo] Player entity not ready.");
       return;
     }
-  
+
     this.stopRotation();
     this._isRotating = true;
     const token = new ControlsToken();
     this._rotationAbortController = token;
-  
-    // Determine target quaternion
+
+    // Determine target rotation
     const rotationOffsetY: Record<'front' | 'back' | 'left' | 'right', number> = {
       front: 0,
       right: -Math.PI / 2,
       back: Math.PI,
       left: Math.PI / 2,
     };
-  
-    const baseQuat = player.base.quaternion.clone();
-    const yawQuat = q2.setFromEuler(
-      new THREE.Euler(0, rotationOffsetY[direction], 0, 'YXZ')
-    );
-    this._rotationTarget = baseQuat.clone().multiply(yawQuat);
-  
-    const startQuat = player.base.quaternion.clone();
+
+    // Get current rotation as starting point
+    const startRotation = player.base.rotation.y;
+    const targetRotation = startRotation + rotationOffsetY[direction];
+
+    // Normalize rotation to prevent large jumps
+    const normalizedTarget = this._normalizeRotation(targetRotation);
+
     const totalSteps = Math.ceil(duration / CONTROLS_TICK_INTERVAL);
     let step = 0;
-  
+
     const tickDelay = (ms: number) => new Promise(res => setTimeout(res, ms));
-  
+
     while (this._isRotating && !token.aborted && step <= totalSteps) {
       const t = step / totalSteps;
-  
-      player.base.quaternion.copy(startQuat).slerp(this._rotationTarget, t);
-      const euler = e2.setFromQuaternion(player.base.quaternion, 'YXZ');
-      player.cam.rotation.y = euler.y;
-  
+
+      // Interpolate rotation
+      const currentRotation = this._lerpAngle(startRotation, normalizedTarget, t);
+
+      // Use rotateTo if available for proper physics sync
+      if (typeof player.rotateTo === 'function') {
+        player.rotateTo(currentRotation);
+      } else {
+        // Fallback: manual rotation sync
+        player.base.rotation.y = currentRotation;
+        player.cam.rotation.y = currentRotation;
+        this.control.camera.rotation.y = currentRotation;
+      }
+
       await tickDelay(CONTROLS_TICK_INTERVAL);
       step++;
     }
-  
+
     this._isRotating = false;
+  }
+
+  /**
+   * Normalize a rotation angle to be within -PI to PI range
+   */
+  private _normalizeRotation(angle: number): number {
+    while (angle > Math.PI) angle -= 2 * Math.PI;
+    while (angle < -Math.PI) angle += 2 * Math.PI;
+    return angle;
+  }
+
+  /**
+   * Lerp between two angles, handling wraparound
+   */
+  private _lerpAngle(start: number, end: number, t: number): number {
+    const diff = end - start;
+    const shortestDiff = ((diff + Math.PI) % (2 * Math.PI)) - Math.PI;
+    return start + shortestDiff * t;
   }
 
    /**

@@ -161,6 +161,15 @@ export class MessageManager {
         )
 
         console.info(`[Hyperfy Chat] Successfully emitted event for message: ${messageId}`)
+
+        // Process the message through Eliza's action system
+        console.info(`[Hyperfy Chat] Processing message through action system`)
+        try {
+          await this.runtime.processActions(memory, [], callback, 'hyperfy');
+          console.info(`[Hyperfy Chat] Successfully processed actions for message: ${messageId}`)
+        } catch (error) {
+          console.error(`[Hyperfy Chat] Error processing actions: ${error}`)
+        }
       } else {
         console.info(`[Hyperfy Chat] Skipping message from self or undefined sender`)
       }

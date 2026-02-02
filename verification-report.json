@@ -1,0 +1,90 @@
+{
+  "timestamp": "2026-01-12T11:18:45.251Z",
+  "checks": [
+    {
+      "name": "Double Jump Action with Direct Velocity Manipulation",
+      "passed": true,
+      "details": "All required components found",
+      "severity": "info"
+    },
+    {
+      "name": "Double Jump Sequence Implementation",
+      "passed": true,
+      "details": "All required components found",
+      "severity": "info"
+    },
+    {
+      "name": "CLETAG Game Action Integration",
+      "passed": true,
+      "details": "All required components found",
+      "severity": "info"
+    },
+    {
+      "name": "CLETAG Game Manager with Continuous Movement",
+      "passed": true,
+      "details": "All required components found",
+      "severity": "info"
+    },
+    {
+      "name": "Collision Detection for Tagging",
+      "passed": true,
+      "details": "All required components found",
+      "severity": "info"
+    },
+    {
+      "name": "Angular Variation to Prevent Wall Clipping",
+      "passed": true,
+      "details": "All required components found",
+      "severity": "info"
+    },
+    {
+      "name": "CLETAG Game Manager Integration in Hyperfy Service",
+      "passed": true,
+      "details": "All required components found",
+      "severity": "info"
+    },
+    {
+      "name": "CLETAG Provider Functions",
+      "passed": true,
+      "details": "All required components found",
+      "severity": "info"
+    },
+    {
+      "name": "CLETAG References in Character System",
+      "passed": true,
+      "details": "All required components found",
+      "severity": "info"
+    },
+    {
+      "name": "Double Jump examples in character",
+      "passed": true,
+      "details": "Examples found in messageExamples",
+      "severity": "info"
+    },
+    {
+      "name": "CLETAG examples in character",
+      "passed": true,
+      "details": "Examples found in messageExamples",
+      "severity": "info"
+    },
+    {
+      "name": "Action export: double-jump-action.ts",
+      "passed": true,
+      "details": "Has proper export",
+      "severity": "error"
+    },
+    {
+      "name": "Action export: cletag-game-action.ts",
+      "passed": true,
+      "details": "Has proper export",
+      "severity": "error"
+    },
+    {
+      "name": "Build Process",
+      "passed": true,
+      "details": "Build completed successfully",
+      "severity": "info"
+    }
+  ],
+  "overallStatus": "PASSED"
+}

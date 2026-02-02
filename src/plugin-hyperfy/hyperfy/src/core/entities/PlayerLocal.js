@@ -268,14 +268,14 @@ export class PlayerLocal extends Entity {
     // For now the best solution is to just add a sphere right in the center of our capsule to keep that problem at bay.
     let shape2
     {
-      // const geometry = new PHYSX.PxSphereGeometry(radius)
-      // shape2 = this.world.physics.physics.createShape(geometry, this.material, true, flags)
-      // shape2.setQueryFilterData(filterData)
-      // shape2.setSimulationFilterData(filterData)
-      // const pose = new PHYSX.PxTransform(PHYSX.PxIDENTITYEnum.PxIdentity)
-      // v1.set(0, halfHeight + radius, 0).toPxTransform(pose)
-      // shape2.setLocalPose(pose)
-      // this.capsule.attachShape(shape2)
+      const geometry = new PHYSX.PxSphereGeometry(radius * 0.8) // Slightly smaller sphere
+      shape2 = this.world.physics.physics.createShape(geometry, this.material, true, flags)
+      shape2.setQueryFilterData(filterData)
+      shape2.setSimulationFilterData(filterData)
+      const pose = new PHYSX.PxTransform(PHYSX.PxIDENTITYEnum.PxIdentity)
+      v1.set(0, halfHeight + radius, 0).toPxTransform(pose)
+      shape2.setLocalPose(pose)
+      this.capsule.attachShape(shape2)
     }
     this.capsuleHandle = this.world.physics.addActor(this.capsule, {
       tag: null,
@@ -1134,6 +1134,28 @@ export class PlayerLocal extends Entity {
   setName(name) {
     this.modify({ name })
     this.world.network.send('entityModified', { id: this.data.id, name })
+  }
+
+  /**
+   * Rotate the player to face a specific direction using physics
+   * This properly updates the physics capsule and camera rotation
+   * @param {number} rotationY - Y-axis rotation in radians
+   */
+  rotateTo(rotationY) {
+    // Update base quaternion
+    this.base.rotation.y = rotationY
+    this.base.quaternion.setFromAxisAngle(UP, rotationY)
+
+    // Update camera rotation
+    this.cam.rotation.y = rotationY
+    this.control.camera.rotation.y = rotationY
+
+    // Send network update
+    this.world.network.send('entityModified', {
+      id: this.data.id,
+      q: this.base.quaternion.toArray(),
+      t: true,
+    })
   }
 
   setSessionAvatar(avatar) {

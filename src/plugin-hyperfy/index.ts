@@ -16,10 +16,18 @@ import { hyperfyEditEntityAction } from "./actions/build";
 import { hyperfyJumpAction } from "./actions/jump";
 import { replyAction } from "./actions/reply";
 import { ignoreAction } from "./actions/ignore";
+import { interactAction } from "../cleetus/actions/interact-action";
+import { useRomAction } from "../cleetus/actions/use-rom-action";
+import { createObjectAction } from "../cleetus/actions/create-object-action";
+import { doubleJumpAction } from "../cleetus/actions/double-jump-action";
+import { cletagGameAction } from "../cleetus/actions/cletag-game-action";
+import { checkTasksAction } from "../cleetus/actions/check-tasks-action";
+import { delegateTaskAction } from "../cleetus/actions/delegate-task-action";
 import { hyperfyProvider } from "./providers/world";
 import { hyperfyEmoteProvider } from "./providers/emote";
 import { hyperfyActionsProvider } from "./providers/actions";
 import { characterProvider } from "./providers/character";
+import { hyperfyAppScriptsProvider } from "./providers/app-scripts";
 import { hyperfyEvents } from "./events";
 
 // --- Hardcoded values matching agent/index.mjs ---
@@ -69,6 +77,14 @@ export const hyperfyPlugin: Plugin = {
   events: hyperfyEvents,
   actions: [
     hyperfyScenePerceptionAction, // Re-enabled with lightweight screenshot support
+    interactAction, // Process first: Hold E key to interact with objects when players say "use" or "interact"
+    useRomAction, // Use Hyperfy ROMs (Read-Only Modules) like sprint, dash, ledge hang
+    createObjectAction, // Create 3D objects using Hyperfy's AI generation (/create command)
+    hyperfyJumpAction, // Basic single jump
+    doubleJumpAction, // Proper double jump with air animation
+    cletagGameAction, // CLETAG game mode - run around crazily and jump
+    checkTasksAction, // Check and perform gas station tasks or delegate them
+    delegateTaskAction, // Assign tasks to players who volunteer to help
     hyperfyGotoEntityAction,
     hyperfyUseItemAction,
     hyperfyUnuseItemAction,
@@ -85,6 +101,7 @@ export const hyperfyPlugin: Plugin = {
     hyperfyEmoteProvider,
     hyperfyActionsProvider,
     characterProvider,
+    hyperfyAppScriptsProvider, // Makes agents aware of available Hyperfy app scripts (ROMs, examples, etc.)
   ],
 };
 

@@ -88,22 +88,25 @@ export const hyperfyUseItemAction: Action = {
     const targetPosition = entity?.root?.position
     if (!targetPosition) {
       await callback({
-        text: `Could not locate entity ${targetEntityId}.`,
+        text: `Could not locate that item.`,
         metadata: { error: 'entity_not_found' }
       });
       return;
     }
 
+    // Get friendly name for logging
+    const entityName = entity?.data?.label || entity?.data?.name || 'item';
+
     await controls.goto(targetPosition.x, targetPosition.z);
 
-    logger.info(`[USE ITEM] Attempting to use item with entity ID: ${targetEntityId}`);
+    logger.info(`[USE ITEM] Walking to ${entityName} and holding E to interact`);
     actions.performAction(targetEntityId);
 
     await callback({
-      text: `Using item: ${targetEntityId}`,
+      text: `Walking to ${entityName} and using it`,
       actions: ['HYPERFY_USE_ITEM'],
       source: 'hyperfy',
-      metadata: { targetEntityId, status: 'triggered' }
+      metadata: { targetEntityId, entityName, status: 'triggered' }
     });
   },
   examples: [

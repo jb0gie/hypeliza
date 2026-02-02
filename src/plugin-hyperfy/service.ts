@@ -23,6 +23,8 @@ import { MessageManager } from './managers//message-manager.js'
 import { VoiceManager } from './managers//voice-manager.js'
 // import { PuppeteerManager } from './managers/puppeteer-manager.js' // Disabled due to WSL2 resource constraints
 import { BuildManager } from './managers/build-manager.js'
+import { ActionManager } from './managers/action-manager.js'
+import { CLETAGGameManager } from './managers/cletag-game-manager.js'
 import { hashFileBuffer, getModuleDirectory } from './utils'
 import * as THREE from './hyperfy/src/core/extras/three'
 import { Layers } from './hyperfy/src/core/extras/Layers'
@@ -57,6 +59,8 @@ export class HyperfyService extends Service {
 	private voiceManager: VoiceManager;
 	// private puppeteerManager: PuppeteerManager | null = null; // Disabled due to WSL2 resource constraints
 	private buildManager: BuildManager;
+	private actionManager: ActionManager;
+	private cletagGameManager: CLETAGGameManager;
 	private spawnSafetyApplied: boolean = false
 
 	public get currentWorldId(): UUID | null {
@@ -127,6 +131,12 @@ export class HyperfyService extends Service {
 			const world = createNodeClientWorld()
 			this.world = world
 
+			// CRITICAL: Assign controls IMMEDIATELY after world creation
+			// This must happen before any entities are created/initialized
+			this.controls = new AgentControls(world)
+			;(world as any).controls = this.controls
+			world.systems.push(this.controls)
+
 			// Initialize managers with delays to avoid overwhelming the system
 			await new Promise(resolve => setTimeout(resolve, 100));
 			// Puppeteer disabled due to WSL2 resource constraints - using direct fetch instead
@@ -148,6 +158,10 @@ export class HyperfyService extends Service {
 			this.behaviorManager = new BehaviorManager(this.runtime);
 			await new Promise(resolve => setTimeout(resolve, 100));
 			this.buildManager = new BuildManager(this.runtime);
+			await new Promise(resolve => setTimeout(resolve, 100));
+			this.actionManager = new ActionManager(this.runtime);
+			await new Promise(resolve => setTimeout(resolve, 100));
+			this.cletagGameManager = new CLETAGGameManager(this.runtime, this);
 
 			; (world as any).playerNamesMap = this.playerNamesMap
 
@@ -161,9 +175,6 @@ export class HyperfyService extends Service {
 			; (world as any).actions = actions
 			world.systems.push(actions);
 
-			this.controls = new AgentControls(world)
-				; (world as any).controls = this.controls
-			world.systems.push(this.controls)
 			// Temporarily comment out AgentLoader to test for updateTransform error
 			const loader = new AgentLoader(world)
 				; (world as any).loader = loader
@@ -828,6 +839,14 @@ export class HyperfyService extends Service {
 		return this.buildManager;
 	}
 
+	getActionManager() {
+		return this.actionManager;
+	}
+
+	getCLETAGGameManager() {
+		return this.cletagGameManager;
+	}
+
 	/**
 	 * Minimal safety nudge: on first stable tick after snapshot, if ground sweep
 	 * finds no environment/prop below the player within a short range, teleport
@@ -868,5 +887,55 @@ export class HyperfyService extends Service {
 			}
 		}
 		setTimeout(check, 100)
+	}
+
+	// ActionManager wrapper methods - expose action interaction capabilities to characters
+
+	async detectNearbyActions(radius: number = 10): Promise<any[]> {
+		if (!this.actionManager) {
+			console.warn('[HyperfyService] ActionManager not initialized')
+			return []
+		}
+		return this.actionManager.detectNearbyActions(radius)
+	}
+
+	async simulateActionClick(actionId: string): Promise<boolean> {
+		if (!this.actionManager) {
+			console.warn('[HyperfyService] ActionManager not initialized')
+			return false
+		}
+		return this.actionManager.simulateActionClick(actionId)
+	}
+
+	async getActionDetails(actionId: string): Promise<any | null> {
+		if (!this.actionManager) {
+			console.warn('[HyperfyService] ActionManager not initialized')
+			return null
+		}
+		return this.actionManager.getActionDetails(actionId)
+	}
+
+	async releaseCurrentAction(): Promise<boolean> {
+		if (!this.actionManager) {
+			console.warn('[HyperfyService] ActionManager not initialized')
+			return false
+		}
+		return this.actionManager.releaseCurrentAction()
+	}
+
+	getCurrentAction(): string | null {
+		if (!this.actionManager) {
+			console.warn('[HyperfyService] ActionManager not initialized')
+			return null
+		}
+		return this.actionManager.getCurrentAction()
+	}
+
+	async interactWithNearestAction(radius: number = 5): Promise<string> {
+		if (!this.actionManager) {
+			console.warn('[HyperfyService] ActionManager not initialized')
+			return 'ActionManager not available'
+		}
+		return this.actionManager.interactWithNearestAction(radius)
 	}
 }
