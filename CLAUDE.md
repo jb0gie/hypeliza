@@ -29,5 +29,7 @@
 - Free models on OpenRouter can be discontinued without notice (e.g., `mistralai/devstral-2512:free`)
 - When a free model ends, the API returns 404 "Not Found" with message about migration to paid slug
 - Error manifests as `AI_APICallError: Not Found` in BehaviorManager logs
-- To fix: Update `.env` to use a current free model (e.g., `google/gemma-3-27b-it:free`)
-- Verify model availability at https://openrouter.ai/api/v1/models before deployment
+- **Critical**: Not all models support JSON mode (required for `ModelType.OBJECT_LARGE` used by reply action)
+- Models like `google/gemma-3-27b-it:free` work for chat but fail with "Bad Request" for JSON mode
+- Use `google/gemma-3-12b-it:free` or `deepseek/deepseek-r1-0528:free` which support both chat and JSON mode
+- Verify model availability and capabilities at https://openrouter.ai/api/v1/models before deployment
