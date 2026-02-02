@@ -32,4 +32,5 @@
 - **Critical**: Not all models support JSON mode (required for `ModelType.OBJECT_LARGE` used by reply action)
 - Models like `google/gemma-3-27b-it:free` work for chat but fail with "Bad Request" for JSON mode
 - Use `google/gemma-3-12b-it:free` or `deepseek/deepseek-r1-0528:free` which support both chat and JSON mode
+- **API Key Consistency**: All character-specific keys must be valid - an invalid `OPENROUTER_API_KEY` causes 401 "User not found" errors even if character-specific keys (e.g., `CLEETUS_OPENROUTER_API_KEY`) are valid
 - Verify model availability and capabilities at https://openrouter.ai/api/v1/models before deployment
