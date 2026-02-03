@@ -81,6 +81,11 @@ export class AgentControls extends System {
   private _rotationTarget: THREE.Quaternion | null = null;
   private _rotationAbortController: ControlsToken | null = null;
 
+  // Smooth rotation state
+  private _targetRotationY: number | null = null;
+  private _currentRotationY: number = 0;
+  private readonly _rotationSmoothing = 10; // Higher = faster rotation
+
   constructor(world: any) {
     super(world); // Call base System constructor
 
@@ -150,7 +155,47 @@ export class AgentControls extends System {
         (this[key] as any).released = false;
       }
     }
-    // We don't run navigationTick here, it runs on its own interval
+    // Smoothly interpolate rotation towards target
+    this._updateRotationSmoothing();
+  }
+
+  /**
+   * Smoothly interpolate rotation towards target rotation
+   */
+  private _updateRotationSmoothing(): void {
+    if (this._targetRotationY === null) return;
+
+    const player = this.world?.entities?.player;
+    if (!player?.base) return;
+
+    // Calculate shortest rotation path
+    let diff = this._targetRotationY - this._currentRotationY;
+    while (diff > Math.PI) diff -= 2 * Math.PI;
+    while (diff < -Math.PI) diff += 2 * Math.PI;
+
+    // Smoothly interpolate
+    const delta = this.world.dt || 0.016;
+    const alpha = 1.0 - Math.exp(-this._rotationSmoothing * delta);
+    this._currentRotationY += diff * alpha;
+
+    // Normalize current rotation
+    while (this._currentRotationY > Math.PI) this._currentRotationY -= 2 * Math.PI;
+    while (this._currentRotationY < -Math.PI) this._currentRotationY += 2 * Math.PI;
+
+    // Apply rotation to player
+    if (typeof player.rotateTo === 'function') {
+      player.rotateTo(this._currentRotationY);
+    } else {
+      player.base.rotation.y = this._currentRotationY;
+      player.base.quaternion.setFromAxisAngle(new THREE.Vector3(0, 1, 0), this._currentRotationY);
+      player.cam.rotation.y = this._currentRotationY;
+      this.camera.rotation.y = this._currentRotationY;
+    }
+
+    // Check if we've reached the target (close enough)
+    if (Math.abs(diff) < 0.01) {
+      this._targetRotationY = null;
+    }
   }
 
   // --- Random Walk Methods --- >
@@ -363,14 +408,10 @@ export class AgentControls extends System {
         const direction = targetPos.clone().sub(playerPos).setY(0).normalize();
         const yRotation = Math.atan2(-direction.x, -direction.z);
 
-        if (typeof player.rotateTo === 'function') {
-          player.rotateTo(yRotation);
-        } else {
-          player.base.rotation.y = yRotation;
-          player.base.quaternion.setFromAxisAngle(new THREE.Vector3(0, 1, 0), yRotation);
-          player.cam.rotation.y = yRotation;
-          this.control.camera.rotation.y = yRotation;
-        }
+        // Set target rotation for smooth interpolation (handled in postLateUpdate)
+        this._targetRotationY = yRotation;
+        this._currentRotationY = player.base.rotation.y;
+
         this.setKey('space', false);
       }
 
@@ -482,7 +523,8 @@ export class AgentControls extends System {
 
         this._isNavigating = false;
         this._navigationTarget = null;
-        
+        this._targetRotationY = null; // Clear rotation target
+
         // Release movement keys
         try {
             this.setKey('keyW', false);
