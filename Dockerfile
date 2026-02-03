@@ -19,9 +19,8 @@ COPY --from=install /temp/dev/node_modules node_modules
 COPY --from=build /app/dist dist
 COPY --from=build /app/package.json .
 COPY --from=build /app/characters characters
-COPY --from=build /app/data data
 
-# Create directories for runtime data
+# Create directories for runtime data (these will be empty, mounted as volumes)
 RUN mkdir -p /app/data /app/generatedImages
 
 # Expose the port (default to 3012 for Cleetus, can be overridden by SERVER_PORT env var)
