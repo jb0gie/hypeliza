@@ -1,25 +1,43 @@
 version: '3.8'
 
 services:
-  hypeliza:
+  cleetus:
     build:
       context: .
       dockerfile: Dockerfile
     ports:
-      - "${SERVER_PORT:-3000}:${SERVER_PORT:-3000}"
+      - "${SERVER_PORT:-3012}:${SERVER_PORT:-3012}"
     environment:
-      # OpenAI Configuration
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
-      
-      # Anthropic Configuration
-      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
-      
-      # OpenAI TTS
-      - OPENAI_TTS_MODEL=${OPENAI_TTS_MODEL}
-      - OPENAI_TTS_VOICE=${OPENAI_TTS_VOICE}
-      - OPENAI_TTS_INSTRUCTIONS=${OPENAI_TTS_INSTRUCTIONS}
-      
-      # ElevenLabs Voice Settings
+      # ============================================
+      # CLEETUS AGENT CONFIGURATION
+      # ============================================
+
+      # AI Provider API Keys (at least one required)
+      - CLEETUS_OPENAI_API_KEY=${CLEETUS_OPENAI_API_KEY}
+      - CLEETUS_OPENROUTER_API_KEY=${CLEETUS_OPENROUTER_API_KEY}
+      - CLEETUS_GROQ_API_KEY=${CLEETUS_GROQ_API_KEY}
+      - CLEETUS_GOOGLE_GENAI_API_KEY=${CLEETUS_GOOGLE_GENAI_API_KEY}
+
+      # Model Provider & Configuration
+      - MODEL_PROVIDER=${MODEL_PROVIDER:-openrouter}
+      - OPENROUTER_MODEL=${OPENROUTER_MODEL:-nvidia/nemotron-nano-12b-v2-vl:free}
+      - OPENROUTER_SMALL_MODEL=${OPENROUTER_SMALL_MODEL:-nvidia/nemotron-nano-12b-v2-vl:free}
+      - OPENROUTER_MEDIUM_MODEL=${OPENROUTER_MEDIUM_MODEL:-nvidia/nemotron-nano-12b-v2-vl:free}
+      - OPENROUTER_LARGE_MODEL=${OPENROUTER_LARGE_MODEL:-nvidia/nemotron-nano-12b-v2-vl:free}
+      - OPENROUTER_EMBEDDING_MODEL=${OPENROUTER_EMBEDDING_MODEL:-nvidia/nemotron-nano-12b-v2-vl:free}
+
+      # Base OpenRouter API Key (required for plugin)
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+
+      # ============================================
+      # HYPERFY WORLD CONNECTION
+      # ============================================
+      - HYPERFY_WS_URL=${HYPERFY_WS_URL:-wss://schizod.io/ws}
+      - WS_URL=${WS_URL:-wss://schizod.io/ws}
+
+      # ============================================
+      # VOICE CONFIGURATION (ElevenLabs)
+      # ============================================
       - ELEVENLABS_XI_API_KEY=${ELEVENLABS_XI_API_KEY}
       - ELEVENLABS_MODEL_ID=${ELEVENLABS_MODEL_ID:-eleven_multilingual_v2}
       - ELEVENLABS_VOICE_ID=${ELEVENLABS_VOICE_ID:-EXAVITQu4vr4xnSDxMaL}
@@ -29,23 +47,32 @@ services:
       - ELEVENLABS_VOICE_USE_SPEAKER_BOOST=${ELEVENLABS_VOICE_USE_SPEAKER_BOOST:-false}
       - ELEVENLABS_OPTIMIZE_STREAMING_LATENCY=${ELEVENLABS_OPTIMIZE_STREAMING_LATENCY:-4}
       - ELEVENLABS_OUTPUT_FORMAT=${ELEVENLABS_OUTPUT_FORMAT:-pcm_16000}
-      
-      # Database Connection
-      - POSTGRES_URL=${POSTGRES_URL}
-      
-      # Server Configuration
-      - SERVER_PORT=${SERVER_PORT:-3000}
-      
-      # Hyperfy World WebSocket URL
-      - WS_URL=${WS_URL:-wss://chill.hyperfy.xyz/ws}
+
+      # ============================================
+      # SERVER CONFIGURATION
+      # ============================================
+      - SERVER_PORT=${SERVER_PORT:-3012}
+      - NODE_ENV=${NODE_ENV:-production}
+
+      # ============================================
+      # MULTI-AGENT CONFIGURATION
+      # ============================================
+      - RUN_CLEETUS=${RUN_CLEETUS:-true}
+      - RUN_SCHIZ0TR0N=${RUN_SCHIZ0TR0N:-false}
+
     volumes:
-      - ./characters:/app/characters
+      # Persistent storage for data
       - ./data:/app/data
       - ./generatedImages:/app/generatedImages
+
+      # Optional: Mount characters for live updates
+      # - ./characters:/app/characters
+
     restart: unless-stopped
+
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:${SERVER_PORT:-3000}/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:${SERVER_PORT:-3012}/health"]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 40s
+      start_period: 60s

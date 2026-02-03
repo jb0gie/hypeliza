@@ -21,8 +21,11 @@ COPY --from=build /app/package.json .
 COPY --from=build /app/characters characters
 COPY --from=build /app/data data
 
-# Expose the port (default to 3000, can be overridden by SERVER_PORT env var)
-EXPOSE 3000
+# Create directories for runtime data
+RUN mkdir -p /app/data /app/generatedImages
+
+# Expose the port (default to 3012 for Cleetus, can be overridden by SERVER_PORT env var)
+EXPOSE 3012
 
 # Set the entrypoint
 ENTRYPOINT [ "bun", "run", "start" ]
