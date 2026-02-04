@@ -1,30 +1,62 @@
-FROM oven/bun:1 AS base
+# Use Node.js 23 (Debian-based) with bun
+FROM node:23-slim
+
+# Install dependencies for Chromium, build tools, and bun
+RUN apt-get update && apt-get install -y \
+    chromium \
+    chromium-driver \
+    wget \
+    curl \
+    gnupg \
+    ca-certificates \
+    fonts-liberation \
+    libasound2 \
+    libatk-bridge2.0-0 \
+    libatk1.0-0 \
+    libcups2 \
+    libdbus-1-3 \
+    libdrm2 \
+    libgbm1 \
+    libgtk-3-0 \
+    libnspr4 \
+    libnss3 \
+    libxcomposite1 \
+    libxdamage1 \
+    libxrandr2 \
+    xdg-utils \
+    python3 \
+    build-essential \
+    unzip \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install bun
+RUN curl -fsSL https://bun.sh/install | bash && \
+    mv /root/.bun/bin/bun /usr/local/bin/bun && \
+    ln -s /usr/local/bin/bun /usr/local/bin/bunx
+
+# Set Puppeteer to use installed Chromium
+ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true \
+    PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
+
 WORKDIR /app
 
-# Install dependencies
-FROM base AS install
-RUN mkdir -p /temp/dev
-COPY package.json bun.lock .npmrc /temp/dev/
-RUN cd /temp/dev && bun install --frozen-lockfile || bun install
+# Copy package files first for better caching
+COPY package.json bun.lock .npmrc ./
+
+# Install dependencies with bun
+RUN bun install
+
+# Copy the rest of the application
+COPY . .
 
 # Build the application
-FROM base AS build
-COPY --from=install /temp/dev/node_modules node_modules
-COPY . .
 RUN bun run build
 
-# Production image
-FROM base AS release
-COPY --from=install /temp/dev/node_modules node_modules
-COPY --from=build /app/dist dist
-COPY --from=build /app/package.json .
-COPY --from=build /app/characters characters
+# Create necessary directories
+RUN mkdir -p /app/data /app/generatedImages /app/characters
 
-# Create directories for runtime data (these will be empty, mounted as volumes)
-RUN mkdir -p /app/data /app/generatedImages
-
-# Expose the port (default to 3012 for Cleetus, can be overridden by SERVER_PORT env var)
+# Expose port
 EXPOSE 3012
 
-# Set the entrypoint
-ENTRYPOINT [ "bun", "run", "start" ]
+# Start the application
+CMD ["bun", "run", "start"]
